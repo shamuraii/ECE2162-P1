@@ -89,7 +89,7 @@ def main():
     #call instruction method to read txt file
     instructions = loadInstructions()
     printInstructions(instructions)
-    
+
     
     print("--------------------")
     

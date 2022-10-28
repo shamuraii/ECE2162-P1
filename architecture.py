@@ -1,43 +1,4 @@
-class IntegerARF:
-    registers = {}
-    def __init__(self, length) -> None:
-        #effectively add "length" number of registers
-        for i in range(length):
-            self.registers['R'+str(i)] = 0
-            
-    def update(self, register, value):
-        #first check for valid register
-        if register in self.registers:
-            #update the register value
-            self.registers[register] = value
-        else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
-            
-    def print(self):
-        #print all registers and their values
-        for key, value in self.registers.items():
-            print(key, ' : ', value)
-            
-class FloatingPointARF:
-    registers = {}
-    def __init__(self, length) -> None:
-        #effectively add "length" number of registers
-        for i in range(length):
-            self.registers['F'+str(i)] = 0.0
-            
-    def update(self, register, value):
-        #first check for valid register
-        if register in self.registers:
-            #update the register value
-            self.registers[register] = value
-        else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
-            
-    def print(self):
-        #print all registers and their values
-        for key, value in self.registers.items():
-            print(key, ' : ', value)
-            
+         
 class RegisterAliasTable:
     #using a dict here for unique-ness, can't have 2 R10s for instance
     entries = {}
