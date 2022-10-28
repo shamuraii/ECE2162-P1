@@ -10,7 +10,8 @@ def main():
 
     #int adder, #rs, ex, mem, #fu
     line = inst_lines[0].split(',')
-    intA = units.IntAdder(line[1],line[2],line[4])
+    args = [eval(i) for i in line]
+    intA = units.IntAdder(args[1],args[2],args[4])
     #fp adder, #rs, ex, mem, #fu
     line = inst_lines[1].split(',')
     #fp multiplier, #rs, ex, mem, #fu

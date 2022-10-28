@@ -1,7 +1,7 @@
 from architecture import ReservationStation
 
 class IntAdder:
-    def __init__(self, rs_count, ex_cycles, fu_count) -> None:
+    def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
         self.rs_count = rs_count
         self.ex_cycles = ex_cycles
         self.fu_count = fu_count
