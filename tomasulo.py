@@ -1,21 +1,6 @@
 import units
 import architecture
 
-class Instruction:
-    def __init__(self, type, field1, field2, field3):
-        self.type = type
-        self.field1 = field1
-        self.field2 = field2
-        self.field3 = field3
-        
-    def print(self):
-        if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
-            print(self.type +' '+ self.field1 +','+ self.field2 +','+ self.field3)
-        elif self.type == "SD" or self.type == "LD":
-            print(self.type +' '+ self.field1 +','+ self.field2 +'('+ self.field3 + ')')
-        else:
-            print(self.type)
-
 def loadInstructions():
     instructions = []
     #open instruction file and read in all lines
@@ -50,7 +35,7 @@ def loadInstructions():
             field3 = parts[2].strip() #grab source 2 reg
             
         #add instruction once all parts are parsed
-        instructions.append(Instruction(type, field1, field2, field3))
+        instructions.append(architecture.Instruction(type, field1, field2, field3))
         
     return instructions
     
@@ -66,30 +51,45 @@ def main():
     print("Loading configuration file...")
     f = open('config.txt', 'r')
     config_lines = f.readlines()
-    config_lines = [s.lower().strip() for s in config_lines]
-
+    config_lines = [s.strip() for s in config_lines]
+    
+    intARF = units.IntegerARF()
+    fpARF = units.FloatingPointARF()
+    
     #int adder, #rs, ex, mem, #fu
     line = config_lines[0].split(',')
     args = [eval(i) for i in line]
-    intA = units.IntAdder(args[1],args[2],args[4])
+    intAdder = units.IntAdder(int(line[1]),int(line[2]),int(line[4]))
     #fp adder, #rs, ex, mem, #fu
     line = config_lines[1].split(',')
+    fpAdder = units.FloatAdder(int(line[1]),int(line[2]),int(line[4]))
     #fp multiplier, #rs, ex, mem, #fu
     line = config_lines[2].split(',')
+    fpMult = units.FloatMult(int(line[1]),int(line[2]),int(line[4]))
     #load/store unit, #rs, ex, mem, #fu
     line = config_lines[3].split(',')
+    lsUnit = units.MemoryUnit(int(line[1]),int(line[2]),int(line[3]),int(line[4]))
     #rob,#entries
     line = config_lines[5].split(',')
     #cdb,#entries
     line = config_lines[6].split(',')
     #HARD TO PARSE, REGISTER=VALUE -- still need to assign reg values to start
-    line = config_lines[7].split(',')
+    initValues = config_lines[7].split(',')
+    #have a list of [R=V,R=V] entries, parse this
+    for init in initValues:
+        pair = init.split('=')
+        #check if an int reg or FP reg
+        if 'R' in pair[0]:
+            intARF.update(pair[0].upper(), int(pair[1])) #update value
+        else:
+            fpARF.update(pair[0], float(pair[1])) #update value
+        
     f.close()
-
+    
+    
     #call instruction method to read txt file
     instructions = loadInstructions()
     printInstructions(instructions)
-
     
     print("--------------------")
     

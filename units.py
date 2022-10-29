@@ -9,17 +9,39 @@ class IntAdder:
         for i in range(rs_count):
             self.rs.append(ReservationStation())
 
+    def printRS(self):
+        for i in self.rs:
+            i.print()
+
     def __str__(self) -> str:
         pass
 
 
 class FloatAdder:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
+        self.rs_count = rs_count
+        self.ex_cycles = ex_cycles
+        self.fu_count = fu_count
+        self.rs = []
+        for i in range(rs_count):
+            self.rs.append(ReservationStation())
+            
+    def printRS(self):
+        for i in self.rs:
+            i.print()
 
 class FloatMult:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
+        self.rs_count = rs_count
+        self.ex_cycles = ex_cycles
+        self.fu_count = fu_count
+        self.rs = []
+        for i in range(rs_count):
+            self.rs.append(ReservationStation())
+            
+    def printRS(self):
+        for i in self.rs:
+            i.print()
 
 class IntegerARF:
     registers = {}
@@ -64,5 +86,15 @@ class FloatingPointARF:
             print(key, ' : ', value)
 
 class MemoryUnit:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
+        self.rs_count = rs_count
+        self.ex_cycles = ex_cycles
+        self.mem_cycles = mem_cycles
+        self.fu_count = fu_count
+        self.rs = []
+        for i in range(rs_count):
+            self.rs.append(ReservationStation())
+            
+    def printRS(self):
+        for i in self.rs:
+            i.print()

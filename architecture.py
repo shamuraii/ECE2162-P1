@@ -30,11 +30,61 @@ class RegisterAliasTable:
 
 class ReservationStation:
     def __init__(self) -> None:
-        pass
+        self.busy = 0 #0 = not busy/not in use, 1 = busy/in use
+        self.op = "None" #will hold the instruction type
+        self.value1 = 0 #value of reg/arg 1
+        self.value2 = 0 #value of reg/arg 2
+        self.dep1 = "None" #holds physical register of dependency 1 - corresponds to value 1
+        self.dep2 = "None" #holds physical register of dependency 2 - corresponds to value 2
+        self.addr = 0 #holds address for load/store instructions
+    
+    #creating update methods for each because we do not know what will be set initially
+    #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
+    
+    def updateBusy(self, newBusy):
+        self.busy = newBusy
+    
+    def updateOp(self, newOp):
+        self.op = newOp
+        
+    def updateValue1(self, newValue1):
+        self.value1 = newValue1
+    
+    def updateValue2(self, newValue2):
+        self.value2 = newValue2
+        
+    def updateDep1(self, newDep1):
+        self.dep1 = newDep1
+    
+    def updateDep2(self, newDep2):
+        self.dep2 = newDep2
+        
+    def updateAddr(self, newAddr):
+        self.addr = newAddr
+        
+    def print(self):
+        print(str(self.busy) +"\t"+ str(self.op) +"\t"+ str(self.value1) +"\t"+ str(self.value2) +"\t"+ str(self.dep1) +"\t"+ str(self.dep2) +"\t"+ str(self.addr))
+    
 
 class ReorderBuffer:
     def __init__(self) -> None:
         pass
+
+
+class Instruction:
+    def __init__(self, type, field1, field2, field3):
+        self.type = type
+        self.field1 = field1
+        self.field2 = field2
+        self.field3 = field3
+        
+    def print(self):
+        if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
+            print(self.type +' '+ self.field1 +','+ self.field2 +','+ self.field3)
+        elif self.type == "SD" or self.type == "LD":
+            print(self.type +' '+ self.field1 +','+ self.field2 +'('+ self.field3 + ')')
+        else:
+            print(self.type)
 
 class InstructionBuffer:
     def __init__(self) -> None:
