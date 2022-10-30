@@ -86,10 +86,18 @@ def main():
         
     f.close()
     
-    
     #call instruction method to read txt file
     instructions = loadInstructions()
     printInstructions(instructions)
+
+    intAdder.populateRS(intAdder.availableRS(), "ADD", 0, 34, "R30", "None")
+    intAdder.populateRS(intAdder.availableRS(), "ADD", 10, 0, "None", "R17")
+    intAdder.printRS()
+    print(intAdder.checkDependencies("R30"))
+    print(intAdder.checkDependencies("R17"))
+    intAdder.resolveDep(intAdder.checkDependencies("R30"), 20, "R30")
+    intAdder.resolveDep(intAdder.checkDependencies("R17"), 64, "R17")
+    intAdder.printRS()
     
     print("--------------------")
     

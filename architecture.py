@@ -38,6 +38,26 @@ class ReservationStation:
         self.dep2 = "None" #holds physical register of dependency 2 - corresponds to value 2
         self.addr = 0 #holds address for load/store instructions
     
+    #returns if this given RS is busy or not
+    def checkBusy(self):
+        return self.busy
+        
+    #clears all fields of the RS for reuse
+    def clearEntry(self):
+        self.busy = 0 
+        self.op = "None" 
+        self.value1 = 0 
+        self.value2 = 0 
+        self.dep1 = "None" 
+        self.dep2 = "None" 
+        self.addr = 0
+    
+    #returns dependencies of the RS
+    def fetchDep1(self):
+        return self.dep1
+    def fetchDep2(self):
+        return self.dep2
+    
     #creating update methods for each because we do not know what will be set initially
     #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
     
@@ -67,7 +87,8 @@ class ReservationStation:
     
 
 class ReorderBuffer:
-    def __init__(self) -> None:
+    def __init__(self, entries) -> None:
+        
         pass
 
 
