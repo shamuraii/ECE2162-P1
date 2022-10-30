@@ -13,7 +13,8 @@ class RegisterAliasTable:
         #do the same for float regs
         for i in range(floatNum):
             self.entries['F'+str(i)] = 'F'+str(i)
-            
+    
+    #method to update RAT entry with new register alias
     def update(self, register, newAlias):
         #first check for valid register
         if register in self.entries:
@@ -22,6 +23,13 @@ class RegisterAliasTable:
         else:
             print("REGISTER " + register + " INVALID - CANNOT UPDATE RAT")
             
+    #method to lookup registers
+    def lookup(self, register):
+        #assuming register found in RAT, return its alias 
+        if register in self.entries:
+            return self.entries[register]
+            
+    #print all registers and their aliases
     def print(self):
         #print all int reg aliases
         for key, value in self.entries.items():
@@ -37,6 +45,7 @@ class ReservationStation:
         self.dep1 = "None" #holds physical register of dependency 1 - corresponds to value 1
         self.dep2 = "None" #holds physical register of dependency 2 - corresponds to value 2
         self.addr = 0 #holds address for load/store instructions
+        self.cycle = 0 #holds cycle issued to ensure we do not issue and begin execution on same cycle 
     
     #returns if this given RS is busy or not
     def checkBusy(self):
@@ -51,12 +60,33 @@ class ReservationStation:
         self.dep1 = "None" 
         self.dep2 = "None" 
         self.addr = 0
+        self.cycle = 0
     
     #returns dependencies of the RS
     def fetchDep1(self):
         return self.dep1
     def fetchDep2(self):
         return self.dep2
+    #method returns True if dependencies exist or False if dependencies do not exist
+    def areThereDeps(self):
+        if self.fetchDep1() != "None" or self.fetchDep2() != "None":
+            return True
+        else:
+            return False
+            
+    #methods to return fields w/ values for computation
+    def fetchValue1(self):
+        return self.value1
+    def fetchValue2(self):
+        return self.value2
+        
+    #method to fetch op to ensure what's going on
+    def fetchOp(self):
+        return self.op            
+    
+    #method to fetch what cycle this instruction was issued on
+    def fetchCycle(self):
+        return self.cycle
     
     #creating update methods for each because we do not know what will be set initially
     #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
@@ -81,6 +111,9 @@ class ReservationStation:
         
     def updateAddr(self, newAddr):
         self.addr = newAddr
+        
+    def updateCycle(self, newCycle):
+        self.cycle = newCycle
         
     def print(self):
         print(str(self.busy) +"\t"+ str(self.op) +"\t"+ str(self.value1) +"\t"+ str(self.value2) +"\t"+ str(self.dep1) +"\t"+ str(self.dep2) +"\t"+ str(self.addr))
@@ -118,7 +151,7 @@ class Instruction:
         return self.type
         
     def getField1(self):
-        return self.field1
+        return self.field1 #destination
     
     def getField2(self):
         return self.field2
@@ -137,6 +170,7 @@ class Instruction:
 
 class InstructionBuffer:
     def __init__(self, length) -> None:
+        #can use a list as a queue with append and pop(index) if we would like
         self.buffer = [] #list of instrs
         #initialize the instruction buffer of length "length"
         for i in range(length):
@@ -159,7 +193,26 @@ class InstructionBuffer:
     
     #method to empty a buffer entry for later reuse
     def clearEntry(self, entry):
-        self.buffer[entry].clearInstr()
+        #print("Print before clearing entry")
+        #self.print()
+        self.buffer.pop(entry)
+        #reappend another empty entry
+        self.buffer.append(Instruction("None", 0, 0, 0))
+        #print("Print after clearing entry")
+        #self.print()
+        
+    #method to check if there are entries in the instr
+    def isEmpty(self):
+        #consider empty as all entries containing "None" as the type
+        for entry in self.buffer:
+            if entry.type != "None":
+                #if there is an entry that doesn't say "None" then it is a populated entry and the buffer is NOT empty
+                return False
+        return True #true if list is empty, false if not
+        
+    #method to just return the list of instructions
+    def getList(self):
+        return self.buffer
         
     #method to print contents of buffer
     def print(self):

@@ -44,6 +44,35 @@ def printInstructions(instructions):
     for curr in instructions:
         curr.print()
 
+def issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF):
+    #need to look at the operation type and decide which FU to send them off to
+    for instr in instrBuffer.getList():
+        #look at the type
+        #if add, try to add it to the add reservation stations
+        if instr.getType() == "ADD" or instr.getType() == "SUB":
+            #issue instruction to add/sub unit
+            successfulIssue = intAdder.issueInstructions(instr, cycle, RAT, intARF)
+            #if true, remove the instr from the buffer, otherwise do not remove since it could not be issued
+            if successfulIssue:
+                instrBuffer.clearEntry(instrBuffer.getList().index(instr))
+                break #only issue one instr per cycle
+                
+            #NEED TO DECIDE IF REGISTER RENAMING WILL BE DONE HERE OR WITHIN THE "issueInstructions" METHOD
+            
+def checkIfDone(instrBuffer, intAdder, fpAdder, fpMult, lsUnit):
+    #check if instrBuffer is empty
+    if instrBuffer.isEmpty() == False:
+        return False #still instructions left, keep going
+    #check RS of each FU as well
+    if intAdder.isRSEmpty() == False:
+        return False #still entries in RS that need processing, keep going
+    #check RS of other units
+    #check ROB for entries that need committing
+    
+    #if everything empty, return true to finish the processing
+    return True
+    
+
 
 def main():
     print("ECE 2162 - Project 1","Jefferson Boothe","James Bickerstaff","--------------------",sep="\n")    
@@ -55,8 +84,7 @@ def main():
     
     intARF = units.IntegerARF()
     fpARF = units.FloatingPointARF()
-    
-    
+    RAT = architecture.RegisterAliasTable(32, 32) #using 32 and 32, shouldn't have to change as there are 32 int and fp logical regs
     
     #int adder, #rs, ex, mem, #fu
     line = config_lines[0].split(',')
@@ -96,10 +124,43 @@ def main():
     printInstructions(instructions)
     for entry in instructions:
         instrBuffer.addInstr(entry)
-    #instrBuffer.print() 
-
-    
+    #instrBuffer.print()     
     print("--------------------")
+
+    #cycle variable to keep track of cycle number
+    cycle = 0
+    #variable to see if done processing yet
+    isDone = False
+    #go until all instructions are complete
+    #instruction list feeds into the instruction buffer, has a limited window size
+    while isDone == False:
+        #begin with printing out the current cycle number
+        print("Cycle: " + str(cycle))
+    
+        #place next instrs available into reservation stations, will also need to rename the registers in this step
+        issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF)
+    
+        #fetch next instrs for the FUs, if possible
+        intAdder.fetchNext(cycle)
+        
+        #exe instructions for each FU, if possible
+        intAdder.exeInstr()
+        
+        #print instruction in execution for FUs - debug
+        #intAdder.printExe()
+        
+        #fill empty instruction buffer slots with new instructions
+        
+        #print("\nADDER RS")
+        #intAdder.printRS()
+        #print("\n")
+        
+        #check if all RS and instruction buffers are empty, if so, exit loop
+        #will also need to make sure all instructions have committed through the ROB **********
+        isDone = checkIfDone(instrBuffer, intAdder, fpAdder, fpMult, lsUnit)
+        
+        cycle = cycle + 1
+        print("\n")
     
 
 if __name__ == '__main__':
