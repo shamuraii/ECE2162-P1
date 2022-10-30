@@ -98,18 +98,75 @@ class Instruction:
         self.field1 = field1
         self.field2 = field2
         self.field3 = field3
+    
+    #method to change contents of the instruction
+    def changeInstr(self, type, field1, field2, field3):
+        self.type = type
+        self.field1 = field1
+        self.field2 = field2
+        self.field3 = field3
+    
+    #method to clear all fields within the instruction
+    def clearInstr(self):
+        self.type = "None"
+        self.field1 = 0
+        self.field2 = 0
+        self.field3 = 0
+     
+    #getters for each part of the instruction
+    def getType(self):
+        return self.type
         
+    def getField1(self):
+        return self.field1
+    
+    def getField2(self):
+        return self.field2
+    
+    def getField3(self):
+        return self.field3
+    
+    #print statement for instruction
     def print(self):
         if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
-            print(self.type +' '+ self.field1 +','+ self.field2 +','+ self.field3)
+            print(self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3))
         elif self.type == "SD" or self.type == "LD":
-            print(self.type +' '+ self.field1 +','+ self.field2 +'('+ self.field3 + ')')
+            print(self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')')
         else:
             print(self.type)
 
 class InstructionBuffer:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, length) -> None:
+        self.buffer = [] #list of instrs
+        #initialize the instruction buffer of length "length"
+        for i in range(length):
+            self.buffer.append(Instruction("None", 0, 0, 0))
+        
+    #method to add instr to the buffer, will add to first possible index - can maybe delete this
+    def addInstrDetails(self, type, field1, field2, field3):
+        #loop through buffer for first available entry
+        for entry in self.buffer:
+            if entry.type == "None":
+                entry.changeInstr(type, field1, field2, field3) #if empty entry, change it to this one
+                
+    #method to add an instruction directly, adds to the first possible entry in the buffer
+    def addInstr(self, instruction):
+        #loop through buffer for first available entry
+        for entry in self.buffer:
+            if entry.type == "None":
+                entry.changeInstr(instruction.getType(), instruction.getField1(), instruction.getField2(), instruction.getField3())
+                break
+    
+    #method to empty a buffer entry for later reuse
+    def clearEntry(self, entry):
+        self.buffer[entry].clearInstr()
+        
+    #method to print contents of buffer
+    def print(self):
+        #loop through entire buffer and print every entry
+        for entry in self.buffer:
+            entry.print()
+                
         
 class CommonDataBus:
     def __init__(self) -> None:

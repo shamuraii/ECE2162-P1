@@ -56,6 +56,8 @@ def main():
     intARF = units.IntegerARF()
     fpARF = units.FloatingPointARF()
     
+    
+    
     #int adder, #rs, ex, mem, #fu
     line = config_lines[0].split(',')
     args = [eval(i) for i in line]
@@ -69,12 +71,15 @@ def main():
     #load/store unit, #rs, ex, mem, #fu
     line = config_lines[3].split(',')
     lsUnit = units.MemoryUnit(int(line[1]),int(line[2]),int(line[3]),int(line[4]))
+    #instruction buffer, number of entries
+    line = config_lines[4].split(',')
+    instrBuffer = architecture.InstructionBuffer(int(line[1]))
     #rob,#entries
-    line = config_lines[5].split(',')
-    #cdb,#entries
     line = config_lines[6].split(',')
-    #HARD TO PARSE, REGISTER=VALUE -- still need to assign reg values to start
-    initValues = config_lines[7].split(',')
+    #cdb,#entries
+    line = config_lines[7].split(',')
+    #HARD TO PARSE, REGISTER=VALUE -- still need to assign reg values to start - done
+    initValues = config_lines[8].split(',')
     #have a list of [R=V,R=V] entries, parse this
     for init in initValues:
         pair = init.split('=')
@@ -89,15 +94,10 @@ def main():
     #call instruction method to read txt file
     instructions = loadInstructions()
     printInstructions(instructions)
+    for entry in instructions:
+        instrBuffer.addInstr(entry)
+    #instrBuffer.print() 
 
-    intAdder.populateRS(intAdder.availableRS(), "ADD", 0, 34, "R30", "None")
-    intAdder.populateRS(intAdder.availableRS(), "ADD", 10, 0, "None", "R17")
-    intAdder.printRS()
-    print(intAdder.checkDependencies("R30"))
-    print(intAdder.checkDependencies("R17"))
-    intAdder.resolveDep(intAdder.checkDependencies("R30"), 20, "R30")
-    intAdder.resolveDep(intAdder.checkDependencies("R17"), 64, "R17")
-    intAdder.printRS()
     
     print("--------------------")
     
