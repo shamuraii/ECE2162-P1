@@ -63,8 +63,7 @@ class unitWithRS:
                
 
     def printRS(self):
-        for i in self.rs:
-            i.print()
+        [print(station) for station in self.rs]
 
 #integer adder is unpipelined - only 1 instr at a time start to finish
 class IntAdder(unitWithRS):
@@ -75,7 +74,7 @@ class IntAdder(unitWithRS):
         self.rs = []
         self.currentExe = -1 #-1 if nothing being executed or RS entry if something is in progress
         self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
-        for i in range(rs_count):
+        for _ in range(rs_count):
             self.rs.append(ReservationStation())
     
     #method to add instructions to the reservation stations - will need to add feature for register renaming
@@ -87,9 +86,8 @@ class IntAdder(unitWithRS):
             return False #return false if the instr was NOT successfully issued
         #else, nextEntry contains the first available RS entry that will be used
         
-        print("RS found, instr to be added: ")
+        print("RS found, instr to be added: ", instruction)
         print("Issuing on cycle: " + str(cycle))
-        instruction.print()
         
         #FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
         dep1 = RAT.lookup(instruction.getField2())
@@ -161,9 +159,8 @@ class IntAdder(unitWithRS):
         print("-------------------------------------")
         print("INT ADDER EXE INFO")
         print("Reservation station: ", str(self.currentExe))
-        print("Instr in progress is: ")
-        self.rs[self.currentExe].print()
-        print("Cycles in progress: " + str(self.cyclesInProgress))
+        print("Instr in progress is: ", str(self.rs[self.currentExe]))
+        print("Cycles in progress: ", str(self.cyclesInProgress))
         print("-------------------------------------")
         
 
@@ -177,7 +174,7 @@ class FloatAdder(unitWithRS):
         self.ex_cycles = ex_cycles
         self.fu_count = fu_count
         self.rs = []
-        for i in range(rs_count):
+        for _ in range(rs_count):
             self.rs.append(ReservationStation())
             
 
@@ -187,7 +184,7 @@ class FloatMult(unitWithRS):
         self.ex_cycles = ex_cycles
         self.fu_count = fu_count
         self.rs = []
-        for i in range(rs_count):
+        for _ in range(rs_count):
             self.rs.append(ReservationStation())
     
 
@@ -213,10 +210,9 @@ class IntegerARF:
         if register in self.registers:
             return self.registers[register]
             
-    def print(self):
-        #print all registers and their values
-        for key, value in self.registers.items():
-            print(key, ' : ', value)
+    def __str__(self):
+        #stringify all registers and their values
+        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
             
 class FloatingPointARF:
     registers = {}
@@ -235,13 +231,12 @@ class FloatingPointARF:
             
     #method to lookup value corresponding to a register
     def lookup(self, register):
-        if register in registers:
-            return registers[register]
+        if register in self.registers:
+            return self.registers[register]
             
-    def print(self):
-        #print all registers and their values
-        for key, value in self.registers.items():
-            print(key, ' : ', value)
+    def __str__(self):
+        #stringify all registers and their values
+        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
 
 class MemoryUnit(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
@@ -250,6 +245,6 @@ class MemoryUnit(unitWithRS):
         self.mem_cycles = mem_cycles
         self.fu_count = fu_count
         self.rs = []
-        for i in range(rs_count):
+        for _ in range(rs_count):
             self.rs.append(ReservationStation())
             

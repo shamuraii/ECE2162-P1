@@ -30,11 +30,9 @@ class RegisterAliasTable:
             return self.entries[register]
             
     #print all registers and their aliases
-    def print(self):
+    def __str__(self):
         #print all int reg aliases
-        for key, value in self.entries.items():
-            print(key, ' : ', value)
-
+        return '\n'.join([str(key, ' : ', value) for key, value in self.entries.items()])
 
 class ReservationStation:
     def __init__(self) -> None:
@@ -115,8 +113,8 @@ class ReservationStation:
     def updateCycle(self, newCycle):
         self.cycle = newCycle
         
-    def print(self):
-        print(str(self.busy) +"\t"+ str(self.op) +"\t"+ str(self.value1) +"\t"+ str(self.value2) +"\t"+ str(self.dep1) +"\t"+ str(self.dep2) +"\t"+ str(self.addr))
+    def __str__(self):
+        return (str(self.busy) +"\t"+ str(self.op) +"\t"+ str(self.value1) +"\t"+ str(self.value2) +"\t"+ str(self.dep1) +"\t"+ str(self.dep2) +"\t"+ str(self.addr))
     
 
 class ReorderBuffer:
@@ -160,20 +158,20 @@ class Instruction:
         return self.field3
     
     #print statement for instruction
-    def print(self):
+    def __str__(self):
         if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
-            print(self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3))
+            return self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3)
         elif self.type == "SD" or self.type == "LD":
-            print(self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')')
+            return self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')'
         else:
-            print(self.type)
+            return self.type
 
 class InstructionBuffer:
     def __init__(self, length) -> None:
         #can use a list as a queue with append and pop(index) if we would like
         self.buffer = [] #list of instrs
         #initialize the instruction buffer of length "length"
-        for i in range(length):
+        for _ in range(length):
             self.buffer.append(Instruction("None", 0, 0, 0))
         
     #method to add instr to the buffer, will add to first possible index - can maybe delete this
@@ -215,10 +213,9 @@ class InstructionBuffer:
         return self.buffer
         
     #method to print contents of buffer
-    def print(self):
-        #loop through entire buffer and print every entry
-        for entry in self.buffer:
-            entry.print()
+    def __str__(self):
+        #concat all instruction strings
+        return '\n'.join(str(entry) for entry in self.buffer)
                 
         
 class CommonDataBus:

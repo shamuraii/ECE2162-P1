@@ -10,6 +10,7 @@ def loadInstructions():
 
     #parse instructions
     for line in inst_lines:    
+        line = line.upper()
         #split each word by commas
         parts = line.split(',')
         #have to split the first part again into instr type and field 1
@@ -41,8 +42,7 @@ def loadInstructions():
     
 def printInstructions(instructions):
     print("Printing instructions...\n")
-    for curr in instructions:
-        curr.print()
+    [print(inst) for inst in instructions]
 
 def issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF):
     #need to look at the operation type and decide which FU to send them off to
@@ -88,7 +88,6 @@ def main():
     
     #int adder, #rs, ex, mem, #fu
     line = config_lines[0].split(',')
-    args = [eval(i) for i in line]
     intAdder = units.IntAdder(int(line[1]),int(line[2]),int(line[4]))
     #fp adder, #rs, ex, mem, #fu
     line = config_lines[1].split(',')
