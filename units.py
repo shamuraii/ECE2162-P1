@@ -49,9 +49,13 @@ class unitWithRS:
         
     #method to clear a RS once it completes
     def clearRS(self, entry):
+        #print("Before")
+        #self.printRS()
         self.rs.pop(entry)
         #reappend another empty entry
         self.rs.append(ReservationStation())
+        #print("After")
+        #self.printRS()
         
     #method to check if all RS empty
     def isRSEmpty(self):
@@ -86,7 +90,7 @@ class IntAdder(unitWithRS):
             return False #return false if the instr was NOT successfully issued
         #else, nextEntry contains the first available RS entry that will be used
         
-        print("RS found, instr to be added: ", instruction)
+        print("RS entry " +str(nextEntry)+ " found, instr to be added: ", instruction)
         print("Issuing on cycle: " + str(cycle))
         
         #FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
@@ -118,7 +122,9 @@ class IntAdder(unitWithRS):
             #check for no dependencies and ensure it is not beginning exe on the same cycle it was issued
             if entry.areThereDeps() == False and entry.fetchCycle() < cycle:
                 #if no deps, execute this one
-                print("Entry to exe: " + str(self.rs.index(entry)))
+                print("Beginning execution of entry: " + str(self.rs.index(entry)))
+                #print("RS being executed: ")
+                #print(entry)
                 self.currentExe = self.rs.index(entry)
                 self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
                 break
@@ -127,7 +133,7 @@ class IntAdder(unitWithRS):
     #method to execute the next instr chosen
     def exeInstr(self):
         #first check if an instr is actually in flight, if not, just jump out
-        if self.rs[self.currentExe].fetchOp() == "None":
+        if self.currentExe == -1:
             return
     
         #make sure the cycles executed thus far is still < the # it takes
