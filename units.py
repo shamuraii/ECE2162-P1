@@ -36,10 +36,10 @@ class unitWithRS:
     #method to resolve dependencies, probably a better way to do this
     def resolveDep(self, entry, value, dep):
         #first find if it is dependency 1 or 2
-        if self.rs[entry].fetchDep1() == dep:
+        if self.rs[entry].fetchDep1() == dep: #check dep 1 to see if it matches
             self.rs[entry].updateValue1(value) #update to resolved value
             self.rs[entry].updateDep1("None") #clear dependency
-        elif self.rs[entry].fetchDep2() == dep:
+        if self.rs[entry].fetchDep2() == dep: #check dep 2 as well to see if it matches
             self.rs[entry].updateValue2(value) #update to resolved value
             self.rs[entry].updateDep2("None") #clear dependency   
         
