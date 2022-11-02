@@ -194,6 +194,11 @@ class Instruction:
         self.field1 = field1
         self.field2 = field2
         self.field3 = field3
+        self.isCycle = "X"
+        self.exCycle = ("X", "X") # (start,end) tuple
+        self.memCycle = ("X", "X") # (start,end) tuple
+        self.wbCycle = "X"
+        self.comCycle = "X"
     
     #method to change contents of the instruction
     def changeInstr(self, type, field1, field2, field3):
@@ -221,15 +226,39 @@ class Instruction:
     
     def getField3(self):
         return self.field3
+
+    def setIsCycle(self, val):
+        self.isCycle = val
+    
+    def setExStart(self, val):
+        self.exCycle[0] = val
+
+    def setExEnd(self, val):
+        self.exCycle[1] = val
+
+    def setMemStart(self, val):
+        self.memCycle[0] = val
+
+    def setMemEnd(self, val):
+        self.memCycle[1] = val
+
+    def setWbCycle(self, val):
+        self.wbCycle = val
+
+    def setComCycle(self, val):
+        self.comCycle = val
     
     #print statement for instruction
-    def __str__(self):
+    def __str__(self) -> str:
         if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
             return self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3)
         elif self.type == "SD" or self.type == "LD":
             return self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')'
         else:
             return self.type
+
+    def longStr(self):
+        return "\t".join([str(self), self.isCycle, str(self.exCycle[0] + "-" + self.exCycle[1]), str(self.memCycle[0] + "-" + self.memCycle[1]), self.wbCycle, self.comCycle])
 
 class InstructionBuffer:
     def __init__(self, length) -> None:

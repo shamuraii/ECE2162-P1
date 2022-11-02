@@ -67,7 +67,7 @@ class unitWithRS:
                
 
     def printRS(self):
-        [print(station) for station in self.rs]
+        for station in self.rs: print(station)
 
 #integer adder is unpipelined - only 1 instr at a time start to finish
 class IntAdder(unitWithRS):

@@ -41,8 +41,14 @@ def loadInstructions():
     return instructions
     
 def printInstructions(instructions):
-    print("Printing instructions...\n")
-    [print(inst) for inst in instructions]
+    print("Printing instructions...")
+    for inst in instructions: print(inst)
+
+def printInstructionsLong(instructions):
+    print("--------------------")
+    print("Final Results")
+    print("\t".join(["Instruction","IS", "EX", "MEM", "WB", "COM"]))
+    for inst in instructions: print(inst.longStr())
 
 def issueInstructions(
     instrBuffer: architecture.InstructionBuffer,
@@ -136,9 +142,9 @@ def main():
     f.close()
     
     #call instruction method to read txt file
-    instructions = loadInstructions()
-    printInstructions(instructions)
-    for entry in instructions:
+    instrList = loadInstructions()
+    printInstructions(instrList)
+    for entry in instrList:
         instrBuffer.addInstr(entry)
     #instrBuffer.print()     
     print("--------------------")
@@ -178,8 +184,8 @@ def main():
         cycle = cycle + 1
         print()
 
-    print("--------------------")
-    print("Complete")
+    print("Finished.")
+    printInstructionsLong(instrList)
     
 
 if __name__ == '__main__':
