@@ -34,7 +34,7 @@ class RegisterAliasTable:
         #print all int reg aliases
         return '\n'.join([str(key, ' : ', value) for key, value in self.entries.items()])
 
-class ReservationStation:
+class ReservationStationEntry:
     def __init__(self) -> None:
         self.busy = 0 #0 = not busy/not in use, 1 = busy/in use
         self.op = "None" #will hold the instruction type
