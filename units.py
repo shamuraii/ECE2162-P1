@@ -74,8 +74,8 @@ class IntAdder(unitWithRS):
         for _ in range(rs_count):
             self.rs.append(ReservationStationEntry())
     
-    #method to add instructions to the reservation stations - will need to add feature for register renaming
-    def issueInstructions(self, instruction, cycle, RAT, intARF):
+    #method to add instruction to the reservation stations - will need to add feature for register renaming
+    def issueInstruction(self, instruction, cycle, RAT, intARF):
         #find next available RS if there is one - do this first as the rest doesn't matter if no RS available
         nextEntry = self.availableRS()
         #if -1, no RS available, just quit out
@@ -83,8 +83,7 @@ class IntAdder(unitWithRS):
             return False #return false if the instr was NOT successfully issued
         #else, nextEntry contains the first available RS entry that will be used
         
-        print("RS entry " +str(nextEntry)+ " found, instr to be added: ", instruction)
-        print("Issuing on cycle: " + str(cycle))
+        print("IntAdder RS " +str(nextEntry)+ " new entry: ", instruction)
         
         #FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
         dep1 = RAT.lookup(instruction.getField2())

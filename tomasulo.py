@@ -74,7 +74,6 @@ def issueInstructions(
     # STEP 2: CHECK ROB
     robFull = ROB.isFull()
     if robFull:
-        # cant do anything
         print("No instruction issued: ROB FULL")
         return
     
@@ -87,7 +86,9 @@ def issueInstructions(
             return
         else:
             # STEP 4: RENAMING PROCESS #TODO
-            issued = intAdder.issueInstructions(instr, cycle, RAT, intARF)
+            robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
+            RAT.update(instr.getField1(), robAlias)
+            issued = intAdder.issueInstruction(instr, cycle, RAT, intARF)
     else:
         issued = False #TODO, placeholder/example
     

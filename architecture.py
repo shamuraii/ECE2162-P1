@@ -19,10 +19,17 @@ class RegisterAliasTable:
         #first check for valid register
         if register in self.entries:
             #update the register value
+            print("RAT UPDATE: ", register, "->", newAlias)
             self.entries[register] = newAlias
         else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE RAT")
+            raise Exception("REGISTER " + register + " INVALID - CANNOT UPDATE RAT")
             
+    def clearEntry(self, alias):
+        # If the alias is present in table, clear it
+        for key,value in self.entries.items():
+            if value == alias:
+                value = key
+
     #method to lookup registers
     def lookup(self, register):
         #assuming register found in RAT, return its alias 
