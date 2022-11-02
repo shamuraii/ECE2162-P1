@@ -46,7 +46,7 @@ class ReservationStationEntry:
         self.cycle = 0 #holds cycle issued to ensure we do not issue and begin execution on same cycle 
     
     def __str__(self):
-        return "\t".join(self.busy, self.op, self.value1, self.value2, self.dep1, self.dep2, self.addr)
+        return "\t".join([self.busy, self.op, self.value1, self.value2, self.dep1, self.dep2, self.addr])
 
     #returns if this given RS is busy or not
     def checkBusy(self):
@@ -125,10 +125,10 @@ class ROBEntry:
         self.done = 0
 
     def __str__(self) -> str:
-        return "\t".join(self.op, self.dest, self.value, self.done)
+        return "\t".join([self.op, self.dest, self.value, self.done])
 
     def updateValue(self, newValue):
-        if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join(self.op, self.dest, self.value))
+        if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join([self.op, self.dest, self.value]))
         # Update value and mark as done
         self.value = newValue
         self.done = 1
@@ -163,7 +163,7 @@ class ReorderBuffer:
 
     def addEntry(self, op, dest, value) -> str:
         # Shouldn't occur, Check ROB before adding. This functionality could be changed though
-        if self.isFull(): raise Exception("Attempting to add entry to FULL ROB: ", ",".join(op, dest, value))
+        if self.isFull(): raise Exception("Attempting to add entry to FULL ROB: ", ",".join([op, dest, value]))
         # Add new entry at head and increment head
         self.entries[self.head] = ROBEntry(op, dest, value)
         outstr = "ROB" + str(self.head)
