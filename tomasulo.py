@@ -59,22 +59,43 @@ def issueInstructions(
     cycle: int,
     RAT: architecture.RegisterAliasTable,
     intARF: units.IntegerARF,
-    fpARF: units.FloatARF
+    fpARF: units.FloatARF,
+    ROB: architecture.ReorderBuffer
 ):
+    #get next instruction
+    issued = False
+    instr = instrBuffer.getNext()
 
-    #need to look at the operation type and decide which FU to send them off to
-    for instr in instrBuffer.getList():
-        #look at the type
-        #if add, try to add it to the add reservation stations
-        if instr.getType() == "ADD" or instr.getType() == "SUB":
-            #issue instruction to add/sub unit
-            successfulIssue = intAdder.issueInstructions(instr, cycle, RAT, intARF)
-            #if true, remove the instr from the buffer, otherwise do not remove since it could not be issued
-            if successfulIssue:
-                instrBuffer.clearEntry(instrBuffer.getList().index(instr))
-                break #only issue one instr per cycle
-                
-            #NEED TO DECIDE IF REGISTER RENAMING WILL BE DONE HERE OR WITHIN THE "issueInstructions" METHOD
+    # STEP 1: CHECK INSTRUCTION
+    if instr is None:
+        print("No instruction issued: Next instruction is 'None'")
+        return
+
+    # STEP 2: CHECK ROB
+    robFull = ROB.isFull()
+    if robFull:
+        # cant do anything
+        print("No instruction issued: ROB FULL")
+        return
+    
+    # STEP 3: CHECK TYPE, then appropriate RS
+    instrType = instr.getType()
+    if instrType == "ADD" or instrType == "SUB":
+        assignedRS = intAdder.availableRS()
+        if assignedRS == -1:
+            print("No instruction issued: RS full")
+            return
+        else:
+            # STEP 4: RENAMING PROCESS #TODO
+            issued = intAdder.issueInstructions(instr, cycle, RAT, intARF)
+    else:
+        issued = False #TODO, placeholder/example
+    
+    # STEP 5: POP BUFFER, SAVE CYCLE INFO
+    if issued:
+        instr.setIsCycle(cycle)
+        instrBuffer.popInstr()
+        print(instr, " issued on cycle: ", cycle)
             
 def checkIfDone(
     instrBuffer: architecture.InstructionBuffer,
@@ -126,6 +147,7 @@ def main():
     instrBuffer = architecture.InstructionBuffer(int(line[1]))
     #rob,#entries
     line = config_lines[6].split(',')
+    ROB = architecture.ReorderBuffer(int(line[1]))
     #cdb,#entries
     line = config_lines[7].split(',')
     #HARD TO PARSE, REGISTER=VALUE -- still need to assign reg values to start - done
@@ -160,7 +182,7 @@ def main():
         print("Cycle: " + str(cycle))
     
         #place next instrs available into reservation stations, will also need to rename the registers in this step
-        issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF)
+        issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB)
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)

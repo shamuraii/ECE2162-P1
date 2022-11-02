@@ -49,13 +49,7 @@ class unitWithRS:
         
     #method to clear a RS once it completes
     def clearRS(self, entry):
-        #print("Before")
-        #self.printRS()
-        self.rs.pop(entry)
-        #reappend another empty entry
-        self.rs.append(ReservationStationEntry())
-        #print("After")
-        #self.printRS()
+        self.rs[entry].clearEntry()
         
     #method to check if all RS empty
     def isRSEmpty(self):
@@ -65,7 +59,6 @@ class unitWithRS:
                 return False #return false as in all entries are NOT empty
         return True #return true if all empty entries 
                
-
     def printRS(self):
         for station in self.rs: print(station)
 

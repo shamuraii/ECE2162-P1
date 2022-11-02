@@ -44,6 +44,7 @@ class ReservationStationEntry:
         self.dep2 = "None" #holds physical register of dependency 2 - corresponds to value 2
         self.addr = 0 #holds address for load/store instructions
         self.cycle = 0 #holds cycle issued to ensure we do not issue and begin execution on same cycle 
+        self.instr = None #references the actual Instruction object this entry represents (For saving timing purposes only)
     
     def __str__(self):
         return "\t".join([self.busy, self.op, self.value1, self.value2, self.dep1, self.dep2, self.addr])
@@ -62,6 +63,7 @@ class ReservationStationEntry:
         self.dep2 = "None" 
         self.addr = 0
         self.cycle = 0
+        self.instr = None
     
     #returns dependencies of the RS
     def fetchDep1(self):
@@ -116,13 +118,16 @@ class ReservationStationEntry:
     def updateCycle(self, newCycle):
         self.cycle = newCycle
 
+    def updateInstr(self, newInstr):
+        self.instr = newInstr
     
 class ROBEntry:
-    def __init__(self, op, dest, value):
+    def __init__(self, op, dest, instr):
         self.op = op
         self.dest = dest
-        self.value = value
+        self.value = None
         self.done = 0
+        self.instr = instr #references the actual Instruction object this entry represents (For saving timing purposes only)
 
     def __str__(self) -> str:
         return "\t".join([self.op, self.dest, self.value, self.done])
@@ -132,6 +137,9 @@ class ROBEntry:
         # Update value and mark as done
         self.value = newValue
         self.done = 1
+
+    def updateInstr(self, newInstr):
+        self.instr = newInstr
 
     def getOp(self):
         return self.op
@@ -161,11 +169,11 @@ class ReorderBuffer:
         # head=tail means empty or full, if head is a valid entry, then full
         return (self.head == self.tail and self.entries[self.head] != None)
 
-    def addEntry(self, op, dest, value) -> str:
+    def addEntry(self, op, dest, instr) -> str:
         # Shouldn't occur, Check ROB before adding. This functionality could be changed though
-        if self.isFull(): raise Exception("Attempting to add entry to FULL ROB: ", ",".join([op, dest, value]))
+        if self.isFull(): raise Exception("Attempting to add entry to FULL ROB: ", ",".join([op, dest, instr]))
         # Add new entry at head and increment head
-        self.entries[self.head] = ROBEntry(op, dest, value)
+        self.entries[self.head] = ROBEntry(op, dest, instr)
         outstr = "ROB" + str(self.head)
         self.head = (self.head + 1) % self.length
         # return "ROB#" where entry was added
@@ -199,20 +207,6 @@ class Instruction:
         self.memCycle = ("X", "X") # (start,end) tuple
         self.wbCycle = "X"
         self.comCycle = "X"
-    
-    #method to change contents of the instruction
-    def changeInstr(self, type, field1, field2, field3):
-        self.type = type
-        self.field1 = field1
-        self.field2 = field2
-        self.field3 = field3
-    
-    #method to clear all fields within the instruction
-    def clearInstr(self):
-        self.type = "None"
-        self.field1 = 0
-        self.field2 = 0
-        self.field3 = 0
      
     #getters for each part of the instruction
     def getType(self):
@@ -258,54 +252,37 @@ class Instruction:
             return self.type
 
     def longStr(self):
-        return "\t".join([str(self), self.isCycle, str(self.exCycle[0] + "-" + self.exCycle[1]), str(self.memCycle[0] + "-" + self.memCycle[1]), self.wbCycle, self.comCycle])
+        return "\t".join([str(self), str(self.isCycle), str(self.exCycle[0] + "-" + self.exCycle[1]), str(self.memCycle[0] + "-" + self.memCycle[1]), str(self.wbCycle), str(self.comCycle)])
 
 class InstructionBuffer:
     def __init__(self, length) -> None:
         #can use a list as a queue with append and pop(index) if we would like
         self.buffer = [] #list of instrs
-        #initialize the instruction buffer of length "length"
-        for _ in range(length):
-            self.buffer.append(Instruction("None", 0, 0, 0))
-        
-    #method to add instr to the buffer, will add to first possible index - can maybe delete this
-    def addInstrDetails(self, type, field1, field2, field3):
-        #loop through buffer for first available entry
-        for entry in self.buffer:
-            if entry.type == "None":
-                entry.changeInstr(type, field1, field2, field3) #if empty entry, change it to this one
+        self.length = length
                 
-    #method to add an instruction directly, adds to the first possible entry in the buffer
-    def addInstr(self, instruction):
-        #loop through buffer for first available entry
-        for entry in self.buffer:
-            if entry.type == "None":
-                entry.changeInstr(instruction.getType(), instruction.getField1(), instruction.getField2(), instruction.getField3())
-                break
+    #method to add an instruction directly, adds to the end of buffer
+    def addInstr(self, instr):
+        self.buffer.append(instr)
     
     #method to empty a buffer entry for later reuse
-    def clearEntry(self, entry):
-        #print("Print before clearing entry")
-        #self.print()
-        self.buffer.pop(entry)
-        #reappend another empty entry
-        self.buffer.append(Instruction("None", 0, 0, 0))
-        #print("Print after clearing entry")
-        #self.print()
+    def popInstr(self):
+        #remove first element (oldest)
+        self.buffer.pop(0)
         
     #method to check if there are entries in the instr
     def isEmpty(self):
-        #consider empty as all entries containing "None" as the type
-        for entry in self.buffer:
-            if entry.type != "None":
-                #if there is an entry that doesn't say "None" then it is a populated entry and the buffer is NOT empty
-                return False
-        return True #true if list is empty, false if not
+        return len(self.buffer) == 0
+
+    def isFull(self):
+        return len(self.buffer) == self.length
         
-    #method to just return the list of instructions
-    def getList(self):
-        return self.buffer
-        
+    def getNext(self) -> Instruction:
+        if self.isEmpty():
+            return None
+        else:
+            #provide first element
+            return self.buffer[0]
+
     #method to print contents of buffer
     def __str__(self):
         #concat all instruction strings
