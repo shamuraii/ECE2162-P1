@@ -50,7 +50,7 @@ def printInstructionsLong(instructions):
     print("\t".join(["Instruction","IS", "EX", "MEM", "WB", "COM"]))
     for inst in instructions: print(inst.longStr())
 
-def issueInstructions(
+def tryIssueInstr(
     instrBuffer: architecture.InstructionBuffer,
     intAdder: units.IntAdder,
     fpAdder: units.FloatAdder,
@@ -183,7 +183,7 @@ def main():
         print("Cycle: " + str(cycle))
     
         #place next instrs available into reservation stations, will also need to rename the registers in this step
-        issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB)
+        tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB)
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)
