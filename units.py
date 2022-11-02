@@ -1,4 +1,4 @@
-from architecture import ReservationStation
+from architecture import ReservationStationEntry
 
 #creating a class for all FUs to inherit from, contains all RS-relevant methods
 class unitWithRS:
@@ -53,7 +53,7 @@ class unitWithRS:
         #self.printRS()
         self.rs.pop(entry)
         #reappend another empty entry
-        self.rs.append(ReservationStation())
+        self.rs.append(ReservationStationEntry())
         #print("After")
         #self.printRS()
         
@@ -67,7 +67,7 @@ class unitWithRS:
                
 
     def printRS(self):
-        [print(station) for station in self.rs]
+        for station in self.rs: print(station)
 
 #integer adder is unpipelined - only 1 instr at a time start to finish
 class IntAdder(unitWithRS):
@@ -79,7 +79,7 @@ class IntAdder(unitWithRS):
         self.currentExe = -1 #-1 if nothing being executed or RS entry if something is in progress
         self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
         for _ in range(rs_count):
-            self.rs.append(ReservationStation())
+            self.rs.append(ReservationStationEntry())
     
     #method to add instructions to the reservation stations - will need to add feature for register renaming
     def issueInstructions(self, instruction, cycle, RAT, intARF):
@@ -181,7 +181,7 @@ class FloatAdder(unitWithRS):
         self.fu_count = fu_count
         self.rs = []
         for _ in range(rs_count):
-            self.rs.append(ReservationStation())
+            self.rs.append(ReservationStationEntry())
             
 
 class FloatMult(unitWithRS):
@@ -191,7 +191,7 @@ class FloatMult(unitWithRS):
         self.fu_count = fu_count
         self.rs = []
         for _ in range(rs_count):
-            self.rs.append(ReservationStation())
+            self.rs.append(ReservationStationEntry())
     
 
 class IntegerARF:
@@ -220,7 +220,7 @@ class IntegerARF:
         #stringify all registers and their values
         return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
             
-class FloatingPointARF:
+class FloatARF:
     registers = {}
     def __init__(self) -> None:
         #effectively add 32 registers
@@ -252,5 +252,5 @@ class MemoryUnit(unitWithRS):
         self.fu_count = fu_count
         self.rs = []
         for _ in range(rs_count):
-            self.rs.append(ReservationStation())
+            self.rs.append(ReservationStationEntry())
             

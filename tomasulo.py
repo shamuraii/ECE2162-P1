@@ -41,10 +41,27 @@ def loadInstructions():
     return instructions
     
 def printInstructions(instructions):
-    print("Printing instructions...\n")
-    [print(inst) for inst in instructions]
+    print("Printing instructions...")
+    for inst in instructions: print(inst)
 
-def issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF):
+def printInstructionsLong(instructions):
+    print("--------------------")
+    print("Final Results")
+    print("\t".join(["Instruction","IS", "EX", "MEM", "WB", "COM"]))
+    for inst in instructions: print(inst.longStr())
+
+def issueInstructions(
+    instrBuffer: architecture.InstructionBuffer,
+    intAdder: units.IntAdder,
+    fpAdder: units.FloatAdder,
+    fpMult: units.FloatMult,
+    lsUnit: units.MemoryUnit,
+    cycle: int,
+    RAT: architecture.RegisterAliasTable,
+    intARF: units.IntegerARF,
+    fpARF: units.FloatARF
+):
+
     #need to look at the operation type and decide which FU to send them off to
     for instr in instrBuffer.getList():
         #look at the type
@@ -59,7 +76,13 @@ def issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT
                 
             #NEED TO DECIDE IF REGISTER RENAMING WILL BE DONE HERE OR WITHIN THE "issueInstructions" METHOD
             
-def checkIfDone(instrBuffer, intAdder, fpAdder, fpMult, lsUnit):
+def checkIfDone(
+    instrBuffer: architecture.InstructionBuffer,
+    intAdder: units.IntAdder,
+    fpAdder: units.FloatAdder,
+    fpMult: units.FloatMult,
+    lsUnit: units.MemoryUnit
+):
     #check if instrBuffer is empty
     if instrBuffer.isEmpty() == False:
         return False #still instructions left, keep going
@@ -83,7 +106,7 @@ def main():
     config_lines = [s.strip() for s in config_lines]
     
     intARF = units.IntegerARF()
-    fpARF = units.FloatingPointARF()
+    fpARF = units.FloatARF()
     RAT = architecture.RegisterAliasTable(32, 32) #using 32 and 32, shouldn't have to change as there are 32 int and fp logical regs
     
     #int adder, #rs, ex, mem, #fu
@@ -119,9 +142,9 @@ def main():
     f.close()
     
     #call instruction method to read txt file
-    instructions = loadInstructions()
-    printInstructions(instructions)
-    for entry in instructions:
+    instrList = loadInstructions()
+    printInstructions(instrList)
+    for entry in instrList:
         instrBuffer.addInstr(entry)
     #instrBuffer.print()     
     print("--------------------")
@@ -159,7 +182,10 @@ def main():
         isDone = checkIfDone(instrBuffer, intAdder, fpAdder, fpMult, lsUnit)
         
         cycle = cycle + 1
-        print("\n")
+        print()
+
+    print("Finished.")
+    printInstructionsLong(instrList)
     
 
 if __name__ == '__main__':

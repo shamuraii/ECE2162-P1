@@ -1,4 +1,4 @@
-         
+
 class RegisterAliasTable:
     #using a dict here for unique-ness, can't have 2 R10s for instance
     entries = {}
@@ -34,7 +34,7 @@ class RegisterAliasTable:
         #print all int reg aliases
         return '\n'.join([str(key, ' : ', value) for key, value in self.entries.items()])
 
-class ReservationStation:
+class ReservationStationEntry:
     def __init__(self) -> None:
         self.busy = 0 #0 = not busy/not in use, 1 = busy/in use
         self.op = "None" #will hold the instruction type
@@ -45,6 +45,9 @@ class ReservationStation:
         self.addr = 0 #holds address for load/store instructions
         self.cycle = 0 #holds cycle issued to ensure we do not issue and begin execution on same cycle 
     
+    def __str__(self):
+        return "\t".join(self.busy, self.op, self.value1, self.value2, self.dep1, self.dep2, self.addr)
+
     #returns if this given RS is busy or not
     def checkBusy(self):
         return self.busy
@@ -112,15 +115,77 @@ class ReservationStation:
         
     def updateCycle(self, newCycle):
         self.cycle = newCycle
-        
-    def __str__(self):
-        return (str(self.busy) +"\t"+ str(self.op) +"\t"+ str(self.value1) +"\t"+ str(self.value2) +"\t"+ str(self.dep1) +"\t"+ str(self.dep2) +"\t"+ str(self.addr))
+
     
+class ROBEntry:
+    def __init__(self, op, dest, value):
+        self.op = op
+        self.dest = dest
+        self.value = value
+        self.done = 0
+
+    def __str__(self) -> str:
+        return "\t".join(self.op, self.dest, self.value, self.done)
+
+    def updateValue(self, newValue):
+        if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join(self.op, self.dest, self.value))
+        # Update value and mark as done
+        self.value = newValue
+        self.done = 1
+
+    def getOp(self):
+        return self.op
+
+    def getDest(self):
+        return self.dest
+
+    def getValue(self):
+        return self.value
+
+    def getDone(self):
+        return self.done
+
 
 class ReorderBuffer:
-    def __init__(self, entries) -> None:
-        
-        pass
+    def __init__(self, length: int) -> None:
+        self.length = length
+        self.entries = [None] * length
+        self.head = 0
+        self.tail = 0
+
+    def isEmpty(self) -> bool:
+        # If oldest instruction is None, all are None
+        return self.entires[self.tail] == None
+
+    def isFull(self) -> bool:
+        # head=tail means empty or full, if head is a valid entry, then full
+        return (self.head == self.tail and self.entries[self.head] != None)
+
+    def addEntry(self, op, dest, value) -> str:
+        # Shouldn't occur, Check ROB before adding. This functionality could be changed though
+        if self.isFull(): raise Exception("Attempting to add entry to FULL ROB: ", ",".join(op, dest, value))
+        # Add new entry at head and increment head
+        self.entries[self.head] = ROBEntry(op, dest, value)
+        outstr = "ROB" + str(self.head)
+        self.head = (self.head + 1) % self.length
+        # return "ROB#" where entry was added
+        return outstr
+    
+    def canCommit(self) -> bool:
+        # return true if oldest entry exists and is done
+        if self.isEmpty():
+            return False
+        else:
+            return self.entries[self.tail].getDone()
+
+    def getOldestEntry(self) -> ROBEntry:
+        # Return the oldest instruction (could be None)
+        return self.entries[self.tail]
+
+    def deleteOldest(self):
+        if self.isEmpty(): raise Exception("Attempting to remove entry from EMPTY ROB!")
+        self.entries[self.tail] = None
+        self.tail = (self.tail + 1) % self.length
 
 
 class Instruction:
@@ -129,6 +194,11 @@ class Instruction:
         self.field1 = field1
         self.field2 = field2
         self.field3 = field3
+        self.isCycle = "X"
+        self.exCycle = ("X", "X") # (start,end) tuple
+        self.memCycle = ("X", "X") # (start,end) tuple
+        self.wbCycle = "X"
+        self.comCycle = "X"
     
     #method to change contents of the instruction
     def changeInstr(self, type, field1, field2, field3):
@@ -156,15 +226,39 @@ class Instruction:
     
     def getField3(self):
         return self.field3
+
+    def setIsCycle(self, val):
+        self.isCycle = val
+    
+    def setExStart(self, val):
+        self.exCycle[0] = val
+
+    def setExEnd(self, val):
+        self.exCycle[1] = val
+
+    def setMemStart(self, val):
+        self.memCycle[0] = val
+
+    def setMemEnd(self, val):
+        self.memCycle[1] = val
+
+    def setWbCycle(self, val):
+        self.wbCycle = val
+
+    def setComCycle(self, val):
+        self.comCycle = val
     
     #print statement for instruction
-    def __str__(self):
+    def __str__(self) -> str:
         if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
             return self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3)
         elif self.type == "SD" or self.type == "LD":
             return self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')'
         else:
             return self.type
+
+    def longStr(self):
+        return "\t".join([str(self), self.isCycle, str(self.exCycle[0] + "-" + self.exCycle[1]), str(self.memCycle[0] + "-" + self.memCycle[1]), self.wbCycle, self.comCycle])
 
 class InstructionBuffer:
     def __init__(self, length) -> None:
