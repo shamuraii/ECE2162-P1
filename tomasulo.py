@@ -88,7 +88,8 @@ def tryIssueInstr(
             # STEP 4: RENAMING PROCESS #TODO
             robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
             RAT.update(instr.getField1(), robAlias)
-            issued = intAdder.issueInstruction(instr, cycle, RAT, intARF)
+            intAdder.issueInstruction(instr, cycle, RAT, intARF)
+            issued = True
     else:
         issued = False #TODO, placeholder/example
     

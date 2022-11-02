@@ -35,6 +35,8 @@ class RegisterAliasTable:
         #assuming register found in RAT, return its alias 
         if register in self.entries:
             return self.entries[register]
+        else:
+            raise Exception("RAT lookup does not exist: " + str(register))
             
     #print all registers and their aliases
     def __str__(self):
@@ -45,6 +47,7 @@ class ReservationStationEntry:
     def __init__(self) -> None:
         self.busy = 0 #0 = not busy/not in use, 1 = busy/in use
         self.op = "None" #will hold the instruction type
+        self.dest = "None" #destination for writeback
         self.value1 = 0 #value of reg/arg 1
         self.value2 = 0 #value of reg/arg 2
         self.dep1 = "None" #holds physical register of dependency 1 - corresponds to value 1
@@ -54,7 +57,7 @@ class ReservationStationEntry:
         self.instr = None #references the actual Instruction object this entry represents (For saving timing purposes only)
     
     def __str__(self):
-        return "\t".join([self.busy, self.op, self.value1, self.value2, self.dep1, self.dep2, self.addr])
+        return "\t".join(str(i) for i in [self.op, self.dest, self.value1, self.value2, self.dep1, self.dep2, self.addr])
 
     #returns if this given RS is busy or not
     def checkBusy(self):
@@ -64,6 +67,7 @@ class ReservationStationEntry:
     def clearEntry(self):
         self.busy = 0 
         self.op = "None" 
+        self.dest = "None"
         self.value1 = 0 
         self.value2 = 0 
         self.dep1 = "None" 
@@ -94,6 +98,9 @@ class ReservationStationEntry:
     def fetchOp(self):
         return self.op            
     
+    def fetchDest(self):
+        return self.dest
+
     #method to fetch what cycle this instruction was issued on
     def fetchCycle(self):
         return self.cycle
@@ -106,6 +113,9 @@ class ReservationStationEntry:
     
     def updateOp(self, newOp):
         self.op = newOp
+        
+    def updateDest(self, newDest):
+        self.dest = newDest
         
     def updateValue1(self, newValue1):
         self.value1 = newValue1

@@ -1,4 +1,54 @@
-from architecture import ReservationStationEntry
+from architecture import Instruction, RegisterAliasTable, ReservationStationEntry
+
+class IntegerARF:
+    registers = {}
+    def __init__(self) -> None:
+        #effectively add 32 registers
+        for i in range(32):
+            self.registers['R'+str(i)] = 0
+            
+    def update(self, register, value):
+        #first check for valid register
+        if register != "R0" and register in self.registers:
+            #update the register value
+            self.registers[register] = value
+        elif register == "R0":
+            print("CANNOT UPDATE R0 - HARDWIRED TO 0")
+        else:
+            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
+            
+    #method to lookup value corresponding to a register
+    def lookup(self, register):
+        if register in self.registers:
+            return self.registers[register]
+            
+    def __str__(self):
+        #stringify all registers and their values
+        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
+            
+class FloatARF:
+    registers = {}
+    def __init__(self) -> None:
+        #effectively add 32 registers
+        for i in range(32):
+            self.registers['F'+str(i)] = 0.0
+            
+    def update(self, register, value):
+        #first check for valid register
+        if register in self.registers:
+            #update the register value
+            self.registers[register] = value
+        else:
+            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
+            
+    #method to lookup value corresponding to a register
+    def lookup(self, register):
+        if register in self.registers:
+            return self.registers[register]
+            
+    def __str__(self):
+        #stringify all registers and their values
+        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
 
 #creating a class for all FUs to inherit from, contains all RS-relevant methods
 class unitWithRS:
@@ -11,15 +61,17 @@ class unitWithRS:
         return -1 #else all RS are found to be busy, return -1 for no RS available
  
     #method to populate the entry of the RS passed in
-    def populateRS(self, entry, op, value1, value2, dep1, dep2, cycle):
+    def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr):
         #populate fields of chosen RS
         self.rs[entry].updateBusy(1) #mark this RS as now being populated/busy doing computation
         self.rs[entry].updateOp(op) #will hold instruction in use
+        self.rs[entry].updateDest(dest)
         self.rs[entry].updateValue1(value1) #will either be a reg. value or placeholder until dep is resolved
         self.rs[entry].updateValue2(value2) #same as line above
         self.rs[entry].updateDep1(dep1) #will be empty or an ROB entry
         self.rs[entry].updateDep2(dep2) #empty or an ROB entry
         self.rs[entry].updateCycle(cycle) #cycle this RS was issued on
+        self.rs[entry].updateInstr(instr)
         
     #method to check each RS for the requested dependency, returns entry if there is a dependency, or -1 if there is not
     def checkDependencies(self, depCheck):
@@ -75,34 +127,33 @@ class IntAdder(unitWithRS):
             self.rs.append(ReservationStationEntry())
     
     #method to add instruction to the reservation stations - will need to add feature for register renaming
-    def issueInstruction(self, instruction, cycle, RAT, intARF):
+    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF):
         #find next available RS if there is one - do this first as the rest doesn't matter if no RS available
         nextEntry = self.availableRS()
-        #if -1, no RS available, just quit out
         if nextEntry == -1:
-            return False #return false if the instr was NOT successfully issued
+            # This should be checked BEFORE calling this function
+            raise Exception("IntAdder attempting to issue with no available RS")
         #else, nextEntry contains the first available RS entry that will be used
         
-        print("IntAdder RS " +str(nextEntry)+ " new entry: ", instruction)
+        #print("IntAdder RS " +str(nextEntry)+ " new entry: ", instr)
         
         #FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
-        dep1 = RAT.lookup(instruction.getField2())
-        dep2 = RAT.lookup(instruction.getField3())
+        dest = RAT.lookup(instr.getField1())
+        dep1 = RAT.lookup(instr.getField2())
+        dep2 = RAT.lookup(instr.getField3())
         value1 = None
         value2 = None
         #check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
-        if dep1 == instruction.getField2():
+        if dep1 == instr.getField2():
             dep1 = "None"
-            value1 = intARF.lookup(instruction.getField2())
-        if dep2 == instruction.getField3():
+            value1 = intARF.lookup(instr.getField2())
+        if dep2 == instr.getField3():
             dep2 = "None"
-            value2 = intARF.lookup(instruction.getField3())
-        
-        #print(str(nextEntry) +" "+ instruction.getType() +" "+ str(value1) +" "+ str(value2) +" "+ dep1 +" "+ dep2)
+            value2 = intARF.lookup(instr.getField3())
         
         #now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
-        self.populateRS(nextEntry, instruction.getType(), value1, value2, dep1, dep2, cycle)
-        return True #return True if the instr was successfully issued
+        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr)
+        print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
             
     #method to fetch next ready instr for execution
     def fetchNext(self, cycle):
@@ -183,58 +234,7 @@ class FloatMult(unitWithRS):
         self.fu_count = fu_count
         self.rs = []
         for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())
-    
-
-class IntegerARF:
-    registers = {}
-    def __init__(self) -> None:
-        #effectively add 32 registers
-        for i in range(32):
-            self.registers['R'+str(i)] = 0
-            
-    def update(self, register, value):
-        #first check for valid register
-        if register != "R0" and register in self.registers:
-            #update the register value
-            self.registers[register] = value
-        elif register == "R0":
-            print("CANNOT UPDATE R0 - HARDWIRED TO 0")
-        else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
-            
-    #method to lookup value corresponding to a register
-    def lookup(self, register):
-        if register in self.registers:
-            return self.registers[register]
-            
-    def __str__(self):
-        #stringify all registers and their values
-        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
-            
-class FloatARF:
-    registers = {}
-    def __init__(self) -> None:
-        #effectively add 32 registers
-        for i in range(32):
-            self.registers['F'+str(i)] = 0.0
-            
-    def update(self, register, value):
-        #first check for valid register
-        if register in self.registers:
-            #update the register value
-            self.registers[register] = value
-        else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
-            
-    #method to lookup value corresponding to a register
-    def lookup(self, register):
-        if register in self.registers:
-            return self.registers[register]
-            
-    def __str__(self):
-        #stringify all registers and their values
-        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
+            self.rs.append(ReservationStationEntry())            
 
 class MemoryUnit(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
@@ -245,4 +245,3 @@ class MemoryUnit(unitWithRS):
         self.rs = []
         for _ in range(rs_count):
             self.rs.append(ReservationStationEntry())
-            
