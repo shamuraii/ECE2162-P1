@@ -220,7 +220,7 @@ class IntegerARF:
         #stringify all registers and their values
         return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
             
-class FloatingPointARF:
+class FloatARF:
     registers = {}
     def __init__(self) -> None:
         #effectively add 32 registers
