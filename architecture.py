@@ -43,6 +43,102 @@ class RegisterAliasTable:
         #print all int reg aliases
         return '\n'.join([str(key, ' : ', value) for key, value in self.entries.items()])
 
+class Instruction:
+    def __init__(self, type, field1, field2, field3):
+        self.type = type
+        self.field1 = field1
+        self.field2 = field2
+        self.field3 = field3
+        self.isCycle = "X"
+        self.exCycle = ("X", "X") # (start,end) tuple
+        self.memCycle = ("X", "X") # (start,end) tuple
+        self.wbCycle = "X"
+        self.comCycle = "X"
+     
+    #getters for each part of the instruction
+    def getType(self):
+        return self.type
+        
+    def getField1(self):
+        return self.field1 #destination
+    
+    def getField2(self):
+        return self.field2
+    
+    def getField3(self):
+        return self.field3
+
+    def setIsCycle(self, val):
+        self.isCycle = val
+    
+    def setExStart(self, val):
+        temp = list(self.exCycle)
+        temp[0] = val
+        self.exCycle = tuple(temp)
+
+    def setExEnd(self, val):
+        temp = list(self.exCycle)
+        temp[1] = val
+        self.exCycle = tuple(temp)
+
+    def setMemStart(self, val):
+        self.memCycle[0] = val
+
+    def setMemEnd(self, val):
+        self.memCycle[1] = val
+
+    def setWbCycle(self, val):
+        self.wbCycle = val
+
+    def setComCycle(self, val):
+        self.comCycle = val
+    
+    #print statement for instruction
+    def __str__(self) -> str:
+        if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
+            return self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3)
+        elif self.type == "SD" or self.type == "LD":
+            return self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')'
+        else:
+            return self.type
+
+    def longStr(self):
+        return "\t".join([str(self), str(self.isCycle), str(self.exCycle[0]) + "-" + str(self.exCycle[1]), str(self.memCycle[0]) + "-" + str(self.memCycle[1]), str(self.wbCycle), str(self.comCycle)])
+
+class InstructionBuffer:
+    def __init__(self, length) -> None:
+        #can use a list as a queue with append and pop(index) if we would like
+        self.buffer = [] #list of instrs
+        self.length = length
+                
+    #method to add an instruction directly, adds to the end of buffer
+    def addInstr(self, instr):
+        self.buffer.append(instr)
+    
+    #method to empty a buffer entry for later reuse
+    def popInstr(self):
+        #remove first element (oldest)
+        self.buffer.pop(0)
+        
+    #method to check if there are entries in the instr
+    def isEmpty(self):
+        return len(self.buffer) == 0
+
+    def isFull(self):
+        return len(self.buffer) == self.length
+        
+    def getNext(self) -> Instruction:
+        if self.isEmpty():
+            return None
+        else:
+            #provide first element
+            return self.buffer[0]
+
+    #method to print contents of buffer
+    def __str__(self):
+        #concat all instruction strings
+        return '\n'.join(str(entry) for entry in self.buffer)
+
 class ReservationStationEntry:
     def __init__(self) -> None:
         self.busy = 0 #0 = not busy/not in use, 1 = busy/in use
@@ -55,6 +151,7 @@ class ReservationStationEntry:
         self.addr = 0 #holds address for load/store instructions
         self.cycle = 0 #holds cycle issued to ensure we do not issue and begin execution on same cycle 
         self.instr = None #references the actual Instruction object this entry represents (For saving timing purposes only)
+        self.done = 0 #signals that it already executed (could be waiting for CDB to writeback)
     
     def __str__(self):
         return "\t".join(str(i) for i in [self.op, self.dest, self.value1, self.value2, self.dep1, self.dep2, self.addr])
@@ -75,18 +172,17 @@ class ReservationStationEntry:
         self.addr = 0
         self.cycle = 0
         self.instr = None
+        self.done = 0
     
     #returns dependencies of the RS
     def fetchDep1(self):
         return self.dep1
     def fetchDep2(self):
         return self.dep2
-    #method returns True if dependencies exist or False if dependencies do not exist
-    def areThereDeps(self):
-        if self.fetchDep1() != "None" or self.fetchDep2() != "None":
-            return True
-        else:
-            return False
+
+    #method returns True if dependencies exist or False if dependencies do not exist AND not already executed
+    def canExecute(self, currCycle):
+        return self.op != "None" and self.fetchDep1() == "None" and self.fetchDep2() == "None" and currCycle > self.cycle and self.done == 0
             
     #methods to return fields w/ values for computation
     def fetchValue1(self):
@@ -105,7 +201,7 @@ class ReservationStationEntry:
     def fetchCycle(self):
         return self.cycle
 
-    def fetchInstr(self):
+    def fetchInstr(self) -> Instruction:
         return self.instr
     
     #creating update methods for each because we do not know what will be set initially
@@ -140,6 +236,9 @@ class ReservationStationEntry:
 
     def updateInstr(self, newInstr):
         self.instr = newInstr
+
+    def markDone(self):
+        self.done = 1
     
 class ROBEntry:
     def __init__(self, op, dest, instr):
@@ -214,105 +313,7 @@ class ReorderBuffer:
         if self.isEmpty(): raise Exception("Attempting to remove entry from EMPTY ROB!")
         self.entries[self.tail] = None
         self.tail = (self.tail + 1) % self.length
-
-
-class Instruction:
-    def __init__(self, type, field1, field2, field3):
-        self.type = type
-        self.field1 = field1
-        self.field2 = field2
-        self.field3 = field3
-        self.isCycle = "X"
-        self.exCycle = ("X", "X") # (start,end) tuple
-        self.memCycle = ("X", "X") # (start,end) tuple
-        self.wbCycle = "X"
-        self.comCycle = "X"
-     
-    #getters for each part of the instruction
-    def getType(self):
-        return self.type
-        
-    def getField1(self):
-        return self.field1 #destination
     
-    def getField2(self):
-        return self.field2
-    
-    def getField3(self):
-        return self.field3
-
-    def setIsCycle(self, val):
-        self.isCycle = val
-    
-    def setExStart(self, val):
-        self.exCycle[0] = val
-
-    def setExEnd(self, val):
-        self.exCycle[1] = val
-
-    def setMemStart(self, val):
-        self.memCycle[0] = val
-
-    def setMemEnd(self, val):
-        self.memCycle[1] = val
-
-    def setWbCycle(self, val):
-        self.wbCycle = val
-
-    def setComCycle(self, val):
-        self.comCycle = val
-    
-    #print statement for instruction
-    def __str__(self) -> str:
-        if self.type != "NOP" and self.type != "SD" and self.type != "LD": 
-            return self.type +' '+ str(self.field1) +','+ str(self.field2) +','+ str(self.field3)
-        elif self.type == "SD" or self.type == "LD":
-            return self.type +' '+ str(self.field1) +','+ str(self.field2) +'('+ str(self.field3) + ')'
-        else:
-            return self.type
-
-    def longStr(self):
-        return "\t".join([str(self), str(self.isCycle), str(self.exCycle[0] + "-" + self.exCycle[1]), str(self.memCycle[0] + "-" + self.memCycle[1]), str(self.wbCycle), str(self.comCycle)])
-
-class InstructionBuffer:
-    def __init__(self, length) -> None:
-        #can use a list as a queue with append and pop(index) if we would like
-        self.buffer = [] #list of instrs
-        self.length = length
-                
-    #method to add an instruction directly, adds to the end of buffer
-    def addInstr(self, instr):
-        self.buffer.append(instr)
-    
-    #method to empty a buffer entry for later reuse
-    def popInstr(self):
-        #remove first element (oldest)
-        self.buffer.pop(0)
-        
-    #method to check if there are entries in the instr
-    def isEmpty(self):
-        return len(self.buffer) == 0
-
-    def isFull(self):
-        return len(self.buffer) == self.length
-        
-    def getNext(self) -> Instruction:
-        if self.isEmpty():
-            return None
-        else:
-            #provide first element
-            return self.buffer[0]
-
-    #method to print contents of buffer
-    def __str__(self):
-        #concat all instruction strings
-        return '\n'.join(str(entry) for entry in self.buffer)
-                
-        
-class CommonDataBus:
-    def __init__(self) -> None:
-       pass 
-        
 class BranchPredictor:
     def __init__(self) -> None:
         pass

@@ -1,5 +1,6 @@
 import units
 import architecture
+import cdb
 
 def loadInstructions():
     instructions = []
@@ -140,7 +141,8 @@ def main():
     ROB = architecture.ReorderBuffer(int(line[1]))
     #cdb,#entries
     line = config_lines[7].split(',')
-    #HARD TO PARSE, REGISTER=VALUE -- still need to assign reg values to start - done
+    CDB = cdb.CommonDataBus(int(line[1]), intAdder, fpAdder, fpMult, lsUnit, ROB)
+    #parse register values
     initValues = config_lines[8].split(',')
     #have a list of [R=V,R=V] entries, parse this
     for init in initValues:
@@ -149,7 +151,7 @@ def main():
         if 'R' in pair[0]:
             intARF.update(pair[0].upper(), int(pair[1])) #update value
         else:
-            fpARF.update(pair[0], float(pair[1])) #update value
+            fpARF.update(pair[0].upper(), float(pair[1])) #update value
         
     f.close()
     
@@ -178,17 +180,16 @@ def main():
         intAdder.fetchNext(cycle)
         
         #exe instructions for each FU, if possible
-        intAdder.exeInstr()
+        intAdder.exeInstr(cycle, CDB)
         
         #print instruction in execution for FUs - debug
         #intAdder.printExe()
         
-        #fill empty instruction buffer slots with new instructions
-        
-        #print("\nADDER RS")
-        #intAdder.printRS()
-        #print("\n")
-        
+        #allow cdb to writeback
+        CDB.writeBack(cycle)
+
+        #allow rob to commit
+
         #check if program has issued and committed all instructions
         isDone = checkIfDone(instrBuffer, ROB)
         

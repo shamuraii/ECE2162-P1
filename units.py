@@ -73,6 +73,22 @@ class unitWithRS:
         self.rs[entry].updateCycle(cycle) #cycle this RS was issued on
         self.rs[entry].updateInstr(instr)
         
+    def writebackRS(self, cdbStation, cdbValue):
+        cdbDest = cdbStation.fetchDest()
+        for entry in self.rs:
+            #check dep 1 for match
+            if entry.fetchDep1() == cdbDest:
+                entry.updateValue1(cdbValue)
+                entry.updateDep1("None")
+            #check dep 2 for match
+            if entry.fetchDep2() == cdbDest:
+                entry.updateValue2(cdbValue) 
+                entry.updateDep2("None")  
+            #clear entry if its the one being WrittenBack
+            if entry is cdbStation:
+                entry.clearEntry()
+            
+
     #method to check each RS for the requested dependency, returns entry if there is a dependency, or -1 if there is not
     def checkDependencies(self, depCheck):
         #loop through all RS's
@@ -110,7 +126,7 @@ class unitWithRS:
             if entry.fetchOp() != "None":
                 return False #return false as in all entries are NOT empty
         return True #return true if all empty entries 
-               
+
     def printRS(self):
         for station in self.rs: print(station)
 
@@ -164,16 +180,17 @@ class IntAdder(unitWithRS):
         #specifically look oldest to newest to ensure an older instruction gets priority to execute
         for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
             #check for no dependencies and ensure it is not beginning exe on the same cycle it was issued
-            if entry.areThereDeps() == False and entry.fetchCycle() < cycle:
+            if entry.canExecute(cycle):
                 #if no deps, execute this one
-                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry))
+                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
                 self.currentExe = self.rs.index(entry)
                 self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
+                entry.fetchInstr().setExStart(cycle)
                 break
                 
                 
     #method to execute the next instr chosen
-    def exeInstr(self):
+    def exeInstr(self, cycle, CDB):
         #first check if an instr is actually in flight, if not, just jump out
         if self.currentExe == -1:
             return
@@ -192,15 +209,15 @@ class IntAdder(unitWithRS):
         elif self.rs[self.currentExe].fetchOp() == "SUB":
             result = self.rs[self.currentExe].fetchValue1() - self.rs[self.currentExe].fetchValue2()
         
-        #******************SEND DATA OVER CDB TO OTHER RESERVATION STATIONS AND ROB****************** - writeback stage
-        #just printing the resulting value for now to 
-        print("Result of " + self.rs[self.currentExe].fetchOp() + " is " + str(result))
         
-        #clear the RS and reset execution variables
-        self.clearRS(self.currentExe)
+        print("Result of ", self.rs[self.currentExe].fetchInstr(), " is ", str(result))
+        
+        #send to CDB buffer and clear FU, mark RS done
+        CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
+        self.rs[self.currentExe].fetchInstr().setExEnd(cycle)
+        self.rs[self.currentExe].markDone()
         self.currentExe = -1
         self.cyclesInProgress = 0
-        
         
     #method to print the instruction in progress and cycle(s) been in exe stage
     def printExe(self):
