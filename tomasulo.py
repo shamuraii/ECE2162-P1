@@ -213,11 +213,12 @@ def main():
 
         #DEBUG
         if cycle > 100:
-            print("Error: Infinite loop.")
+            print("Error: DEBUG max cycles.")
             break
 
     printInstructionsLong(instrList)
-    
+    print(intARF)
+    print(fpARF)
 
 if __name__ == '__main__':
     main()

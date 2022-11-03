@@ -24,7 +24,7 @@ class IntegerARF:
             
     def __str__(self):
         #stringify all registers and their values
-        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
+        return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
             
 class FloatARF:
     registers = {}
@@ -48,7 +48,7 @@ class FloatARF:
             
     def __str__(self):
         #stringify all registers and their values
-        return '\n'.join([str(key, ' : ', value) for key, value in self.registers.items()])
+        return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
 
 #creating a class for all FUs to inherit from, contains all RS-relevant methods
 class unitWithRS:
