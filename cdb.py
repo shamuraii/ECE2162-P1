@@ -49,6 +49,7 @@ class CommonDataBus:
         allBuffs.sort(key=lambda x: x[0].fetchCycle())
         for buff in allBuffs:
             wbStation, wbValue, doneCycle = buff
+            wbDest = wbStation.fetchDest()
             if doneCycle == cycle:
                 continue # cannot writeback same cycle added, try another instruction
             
@@ -59,11 +60,12 @@ class CommonDataBus:
 
             #update all RS in all units (unit should delete station entry)
             self.intAdder.writebackRS(wbStation, wbValue)
-            #fpadder, fpmult, etc
+            #fpadder
+            #fpmult
+            #etc
 
             #update ROB entry
-            #self.ROB.writeback()
-            #ROB.writeback(station, value) or similar
+            self.ROB.writebackROB(wbDest, wbValue, cycle)
 
             #remove from whichever CDB buffer it came from
             if buff in self.intAddBuff: self.intAddBuff.remove(buff)

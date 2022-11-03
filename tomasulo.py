@@ -189,6 +189,21 @@ def main():
         CDB.writeBack(cycle)
 
         #allow rob to commit
+        if ROB.canCommit(cycle):
+            entry = ROB.getOldestEntry()
+            print("ROB Commit: ", entry.getInstr())
+
+            #update commit cycle
+            entry.getInstr().setComCycle(cycle)
+            # Update ARF
+            if 'R' in entry.getDest():
+                intARF.update(entry.getDest(), entry.getValue())
+            elif 'F' in entry.getDest():
+                fpARF.update(entry.getDest(), entry.getValue())
+            # Remove from RAT if applicable
+            RAT.clearEntry(entry.getDest())
+            # Remove from ROB
+            ROB.deleteOldest()
 
         #check if program has issued and committed all instructions
         isDone = checkIfDone(instrBuffer, ROB)
@@ -197,7 +212,7 @@ def main():
         print()
 
         #DEBUG
-        if cycle > 10:
+        if cycle > 100:
             print("Error: Infinite loop.")
             break
 

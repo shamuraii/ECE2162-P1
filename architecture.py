@@ -246,16 +246,18 @@ class ROBEntry:
         self.dest = dest
         self.value = None
         self.done = 0
+        self.doneCycle = 0
         self.instr = instr #references the actual Instruction object this entry represents (For saving timing purposes only)
 
     def __str__(self) -> str:
         return "\t".join([self.op, self.dest, self.value, self.done])
 
-    def updateValue(self, newValue):
+    def updateValue(self, newValue, cycle):
         if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join([self.op, self.dest, self.value]))
         # Update value and mark as done
         self.value = newValue
         self.done = 1
+        self.doneCycle = cycle
 
     def updateInstr(self, newInstr):
         self.instr = newInstr
@@ -271,6 +273,12 @@ class ROBEntry:
 
     def getDone(self):
         return self.done
+
+    def getDoneCycle(self):
+        return self.doneCycle
+
+    def getInstr(self):
+        return self.instr
 
 
 class ReorderBuffer:
@@ -298,12 +306,17 @@ class ReorderBuffer:
         # return "ROB#" where entry was added
         return outstr
     
-    def canCommit(self) -> bool:
-        # return true if oldest entry exists and is done
+    def canCommit(self, cycle) -> bool:
+        # return true if oldest entry exists and finished at least last cycle (cant WB and Commit same cycle)
         if self.isEmpty():
             return False
         else:
-            return self.entries[self.tail].getDone()
+            return self.entries[self.tail].getDone() != 0 and self.entries[self.tail].getDoneCycle() < cycle
+
+    def writebackROB(self, cdbDest, cdbValue, doneCycle):
+        for idx, entry in enumerate(self.entries):
+            if str("ROB"+str(idx)) == cdbDest:
+                entry.updateValue(cdbValue, doneCycle)
 
     def getOldestEntry(self) -> ROBEntry:
         # Return the oldest instruction (could be None)
