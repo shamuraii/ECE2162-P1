@@ -1,5 +1,6 @@
 import units
 import architecture
+import cdb
 
 def loadInstructions():
     instructions = []
@@ -50,7 +51,7 @@ def printInstructionsLong(instructions):
     print("\t".join(["Instruction","IS", "EX", "MEM", "WB", "COM"]))
     for inst in instructions: print(inst.longStr())
 
-def issueInstructions(
+def tryIssueInstr(
     instrBuffer: architecture.InstructionBuffer,
     intAdder: units.IntAdder,
     fpAdder: units.FloatAdder,
@@ -59,41 +60,52 @@ def issueInstructions(
     cycle: int,
     RAT: architecture.RegisterAliasTable,
     intARF: units.IntegerARF,
-    fpARF: units.FloatARF
+    fpARF: units.FloatARF,
+    ROB: architecture.ReorderBuffer
 ):
+    #get next instruction
+    issued = False
+    instr = instrBuffer.getNext()
 
-    #need to look at the operation type and decide which FU to send them off to
-    for instr in instrBuffer.getList():
-        #look at the type
-        #if add, try to add it to the add reservation stations
-        if instr.getType() == "ADD" or instr.getType() == "SUB":
-            #issue instruction to add/sub unit
-            successfulIssue = intAdder.issueInstructions(instr, cycle, RAT, intARF)
-            #if true, remove the instr from the buffer, otherwise do not remove since it could not be issued
-            if successfulIssue:
-                instrBuffer.clearEntry(instrBuffer.getList().index(instr))
-                break #only issue one instr per cycle
-                
-            #NEED TO DECIDE IF REGISTER RENAMING WILL BE DONE HERE OR WITHIN THE "issueInstructions" METHOD
+    # STEP 1: CHECK INSTRUCTION
+    if instr is None:
+        print("No instruction issued: Next instruction is 'None'")
+        return
+
+    # STEP 2: CHECK ROB
+    robFull = ROB.isFull()
+    if robFull:
+        print("No instruction issued: ROB FULL")
+        return
+    
+    # STEP 3: CHECK TYPE, then appropriate RS
+    instrType = instr.getType()
+    if instrType == "ADD" or instrType == "SUB":
+        assignedRS = intAdder.availableRS()
+        if assignedRS == -1:
+            print("No instruction issued: RS full")
+            return
+        else:
+            # STEP 4: RENAMING PROCESS #TODO
+            robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
+            RAT.update(instr.getField1(), robAlias)
+            intAdder.issueInstruction(instr, cycle, RAT, intARF)
+            issued = True
+    else:
+        issued = False #TODO, placeholder/example
+    
+    # STEP 5: POP BUFFER, SAVE CYCLE INFO
+    if issued:
+        instr.setIsCycle(cycle)
+        instrBuffer.popInstr()
+        print(instr, " issued on cycle: ", cycle)
             
 def checkIfDone(
     instrBuffer: architecture.InstructionBuffer,
-    intAdder: units.IntAdder,
-    fpAdder: units.FloatAdder,
-    fpMult: units.FloatMult,
-    lsUnit: units.MemoryUnit
+    ROB: architecture.ReorderBuffer
 ):
-    #check if instrBuffer is empty
-    if instrBuffer.isEmpty() == False:
-        return False #still instructions left, keep going
-    #check RS of each FU as well
-    if intAdder.isRSEmpty() == False:
-        return False #still entries in RS that need processing, keep going
-    #check RS of other units
-    #check ROB for entries that need committing
-    
-    #if everything empty, return true to finish the processing
-    return True
+    #check if instructions left to issue or commit
+    return instrBuffer.isEmpty() and ROB.isEmpty()
     
 
 
@@ -126,9 +138,11 @@ def main():
     instrBuffer = architecture.InstructionBuffer(int(line[1]))
     #rob,#entries
     line = config_lines[6].split(',')
+    ROB = architecture.ReorderBuffer(int(line[1]))
     #cdb,#entries
     line = config_lines[7].split(',')
-    #HARD TO PARSE, REGISTER=VALUE -- still need to assign reg values to start - done
+    CDB = cdb.CommonDataBus(int(line[1]), intAdder, fpAdder, fpMult, lsUnit, ROB)
+    #parse register values
     initValues = config_lines[8].split(',')
     #have a list of [R=V,R=V] entries, parse this
     for init in initValues:
@@ -137,7 +151,7 @@ def main():
         if 'R' in pair[0]:
             intARF.update(pair[0].upper(), int(pair[1])) #update value
         else:
-            fpARF.update(pair[0], float(pair[1])) #update value
+            fpARF.update(pair[0].upper(), float(pair[1])) #update value
         
     f.close()
     
@@ -160,33 +174,51 @@ def main():
         print("Cycle: " + str(cycle))
     
         #place next instrs available into reservation stations, will also need to rename the registers in this step
-        issueInstructions(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF)
+        tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB)
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)
         
         #exe instructions for each FU, if possible
-        intAdder.exeInstr()
+        intAdder.exeInstr(cycle, CDB)
         
         #print instruction in execution for FUs - debug
         #intAdder.printExe()
         
-        #fill empty instruction buffer slots with new instructions
-        
-        #print("\nADDER RS")
-        #intAdder.printRS()
-        #print("\n")
-        
-        #check if all RS and instruction buffers are empty, if so, exit loop
-        #will also need to make sure all instructions have committed through the ROB **********
-        isDone = checkIfDone(instrBuffer, intAdder, fpAdder, fpMult, lsUnit)
+        #allow cdb to writeback
+        CDB.writeBack(cycle)
+
+        #allow rob to commit
+        if ROB.canCommit(cycle):
+            entry = ROB.getOldestEntry()
+            print("ROB Commit: ", entry.getInstr())
+
+            #update commit cycle
+            entry.getInstr().setComCycle(cycle)
+            # Update ARF
+            if 'R' in entry.getDest():
+                intARF.update(entry.getDest(), entry.getValue())
+            elif 'F' in entry.getDest():
+                fpARF.update(entry.getDest(), entry.getValue())
+            # Remove from RAT if applicable
+            RAT.clearEntry(entry.getDest())
+            # Remove from ROB
+            ROB.deleteOldest()
+
+        #check if program has issued and committed all instructions
+        isDone = checkIfDone(instrBuffer, ROB)
         
         cycle = cycle + 1
         print()
 
-    print("Finished.")
+        #DEBUG
+        if cycle > 100:
+            print("Error: DEBUG max cycles.")
+            break
+
     printInstructionsLong(instrList)
-    
+    print(intARF)
+    print(fpARF)
 
 if __name__ == '__main__':
     main()
