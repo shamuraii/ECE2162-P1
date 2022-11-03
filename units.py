@@ -161,13 +161,12 @@ class IntAdder(unitWithRS):
         if self.currentExe != -1:
             return
         #look through reservation stations to find an entry with both fields ready and no dependencies
-        for entry in self.rs:
+        #specifically look oldest to newest to ensure an older instruction gets priority to execute
+        for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
             #check for no dependencies and ensure it is not beginning exe on the same cycle it was issued
             if entry.areThereDeps() == False and entry.fetchCycle() < cycle:
                 #if no deps, execute this one
-                print("Beginning execution of entry: " + str(self.rs.index(entry)))
-                #print("RS being executed: ")
-                #print(entry)
+                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry))
                 self.currentExe = self.rs.index(entry)
                 self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
                 break

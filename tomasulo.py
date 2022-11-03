@@ -101,22 +101,10 @@ def tryIssueInstr(
             
 def checkIfDone(
     instrBuffer: architecture.InstructionBuffer,
-    intAdder: units.IntAdder,
-    fpAdder: units.FloatAdder,
-    fpMult: units.FloatMult,
-    lsUnit: units.MemoryUnit
+    ROB: architecture.ReorderBuffer
 ):
-    #check if instrBuffer is empty
-    if instrBuffer.isEmpty() == False:
-        return False #still instructions left, keep going
-    #check RS of each FU as well
-    if intAdder.isRSEmpty() == False:
-        return False #still entries in RS that need processing, keep going
-    #check RS of other units
-    #check ROB for entries that need committing
-    
-    #if everything empty, return true to finish the processing
-    return True
+    #check if instructions left to issue or commit
+    return instrBuffer.isEmpty() and ROB.isEmpty()
     
 
 
@@ -201,14 +189,17 @@ def main():
         #intAdder.printRS()
         #print("\n")
         
-        #check if all RS and instruction buffers are empty, if so, exit loop
-        #will also need to make sure all instructions have committed through the ROB **********
-        isDone = checkIfDone(instrBuffer, intAdder, fpAdder, fpMult, lsUnit)
+        #check if program has issued and committed all instructions
+        isDone = checkIfDone(instrBuffer, ROB)
         
         cycle = cycle + 1
         print()
 
-    print("Finished.")
+        #DEBUG
+        if cycle > 10:
+            print("Error: Infinite loop.")
+            break
+
     printInstructionsLong(instrList)
     
 

@@ -104,6 +104,9 @@ class ReservationStationEntry:
     #method to fetch what cycle this instruction was issued on
     def fetchCycle(self):
         return self.cycle
+
+    def fetchInstr(self):
+        return self.instr
     
     #creating update methods for each because we do not know what will be set initially
     #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
@@ -116,7 +119,7 @@ class ReservationStationEntry:
         
     def updateDest(self, newDest):
         self.dest = newDest
-        
+
     def updateValue1(self, newValue1):
         self.value1 = newValue1
     
@@ -180,7 +183,7 @@ class ReorderBuffer:
 
     def isEmpty(self) -> bool:
         # If oldest instruction is None, all are None
-        return self.entires[self.tail] == None
+        return self.entries[self.tail] == None
 
     def isFull(self) -> bool:
         # head=tail means empty or full, if head is a valid entry, then full
