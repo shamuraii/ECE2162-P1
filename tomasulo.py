@@ -1,6 +1,7 @@
 import units
 import architecture
 import cdb
+import branchPredictor
 
 def loadInstructions():
     instructions = []
@@ -9,6 +10,8 @@ def loadInstructions():
     inst_file = open('instructions.txt', 'r')
     inst_lines = inst_file.readlines()
 
+    #var to keep track of what PC of each instr will be
+    PC = 0
     #parse instructions
     for line in inst_lines:    
         line = line.upper()
@@ -37,7 +40,8 @@ def loadInstructions():
             field3 = parts[2].strip() #grab source 2 reg
             
         #add instruction once all parts are parsed
-        instructions.append(architecture.Instruction(type, field1, field2, field3))
+        instructions.append(architecture.Instruction(type, field1, field2, field3, PC))
+        PC = PC + 1
         
     return instructions
     
@@ -61,7 +65,9 @@ def tryIssueInstr(
     RAT: architecture.RegisterAliasTable,
     intARF: units.IntegerARF,
     fpARF: units.FloatARF,
-    ROB: architecture.ReorderBuffer
+    ROB: architecture.ReorderBuffer,
+    BP: branchPredictor.BranchPredictor,
+    PC: int
 ):
     #get next instruction
     issued = False
@@ -86,10 +92,24 @@ def tryIssueInstr(
             print("No instruction issued: RS full")
             return
         else:
-            # STEP 4: RENAMING PROCESS #TODO
+            # STEP 4: RENAMING PROCESS 
             robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
-            RAT.update(instr.getField1(), robAlias)
-            intAdder.issueInstruction(instr, cycle, RAT, intARF)
+            #need to rename after grabbing dependencies within issueInstruction method, or else trickling dependencies are messed up
+            #ie ADD R4,R4,R1 will be correct, but if followed by ADD R4,R4,R2 the dependency will point to this instrs destination and never get forwarded the result
+            #RAT.update(instr.getField1(), robAlias) 
+            intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB)
+            issued = True
+    elif instrType == "BEQ" or instrType == "BNE":
+        #branch instructions are issued into the reservation stations of int ALU
+        assignedRS = intAdder.availableRS()
+        if assignedRS == -1:
+            print("No instruction issued: RS full")
+            return
+        else:
+            #will return ROB alias, but don't actually need it 
+            robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
+            #issue this instruction to the integer adder
+            intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB)
             issued = True
     else:
         issued = False #TODO, placeholder/example
@@ -142,6 +162,8 @@ def main():
     #cdb,#entries
     line = config_lines[7].split(',')
     CDB = cdb.CommonDataBus(int(line[1]), intAdder, fpAdder, fpMult, lsUnit, ROB)
+    #create the branch predictor unit
+    BP = branchPredictor.BranchPredictor()
     #parse register values
     initValues = config_lines[8].split(',')
     #have a list of [R=V,R=V] entries, parse this
@@ -160,11 +182,13 @@ def main():
     printInstructions(instrList)
     for entry in instrList:
         instrBuffer.addInstr(entry)
-    #instrBuffer.print()     
+    #print(instrBuffer)     
     print("--------------------")
 
     #cycle variable to keep track of cycle number
     cycle = 0
+    #Program counter variable to keep track of where we are in the program & to deal with branches
+    PC = 0
     #variable to see if done processing yet
     isDone = False
     #go until all instructions are complete
@@ -172,9 +196,10 @@ def main():
     while isDone == False:
         #begin with printing out the current cycle number
         print("Cycle: " + str(cycle))
+        print("PC: " + str(PC))
     
         #place next instrs available into reservation stations, will also need to rename the registers in this step
-        tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB)
+        tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB, BP, PC)
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)
@@ -184,6 +209,7 @@ def main():
         
         #print instruction in execution for FUs - debug
         #intAdder.printExe()
+        #intAdder.printRS()
         
         #allow cdb to writeback
         CDB.writeBack(cycle)
@@ -195,13 +221,16 @@ def main():
 
             #update commit cycle
             entry.getInstr().setComCycle(cycle)
-            # Update ARF
-            if 'R' in entry.getDest():
-                intARF.update(entry.getDest(), entry.getValue())
-            elif 'F' in entry.getDest():
-                fpARF.update(entry.getDest(), entry.getValue())
-            # Remove from RAT if applicable
-            RAT.clearEntry(entry.getDest())
+            
+            #don't update ARF and RAT for branches
+            if entry.getInstr().getType() != "BNE" and entry.getInstr().getType() != "BEQ":
+                # Update ARF
+                if 'R' in entry.getDest():
+                    intARF.update(entry.getDest(), entry.getValue())
+                elif 'F' in entry.getDest():
+                    fpARF.update(entry.getDest(), entry.getValue())
+                # Remove from RAT if applicable
+                RAT.clearEntry(entry.getRobDest())
             # Remove from ROB
             ROB.deleteOldest()
 
@@ -209,6 +238,7 @@ def main():
         isDone = checkIfDone(instrBuffer, ROB)
         
         cycle = cycle + 1
+        PC = PC + 1
         print()
 
         #DEBUG

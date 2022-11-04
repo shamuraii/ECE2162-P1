@@ -1,4 +1,4 @@
-from architecture import Instruction, RegisterAliasTable, ReservationStationEntry
+from architecture import Instruction, RegisterAliasTable, ReservationStationEntry, ReorderBuffer
 
 class IntegerARF:
     registers = {}
@@ -143,7 +143,7 @@ class IntAdder(unitWithRS):
             self.rs.append(ReservationStationEntry())
     
     #method to add instruction to the reservation stations - will need to add feature for register renaming
-    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF):
+    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF, robAlias, ROB: ReorderBuffer):
         #find next available RS if there is one - do this first as the rest doesn't matter if no RS available
         nextEntry = self.availableRS()
         if nextEntry == -1:
@@ -154,18 +154,60 @@ class IntAdder(unitWithRS):
         #print("IntAdder RS " +str(nextEntry)+ " new entry: ", instr)
         
         #FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
-        dest = RAT.lookup(instr.getField1())
-        dep1 = RAT.lookup(instr.getField2())
-        dep2 = RAT.lookup(instr.getField3())
+        dep1 = None #RAT.lookup(instr.getField2())
+        dep2 = None
         value1 = None
         value2 = None
-        #check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
-        if dep1 == instr.getField2():
-            dep1 = "None"
-            value1 = intARF.lookup(instr.getField2())
-        if dep2 == instr.getField3():
-            dep2 = "None"
-            value2 = intARF.lookup(instr.getField3())
+        
+        #if it is a traditional add/sub, figure out dependencies and values based on fields 2 and 3
+        if instr.getType() != "BEQ" and instr.getType() != "BNE":
+            #need to grab deps before updating RAT, or else the dependency may be overwritten by the new ROB alias
+            dep1 = RAT.lookup(instr.getField2())
+            dep2 = RAT.lookup(instr.getField3())
+            #dependencies obtained, update RAT
+            RAT.update(instr.getField1(), robAlias)
+            #and finally set the destination as this instructions ROB entry (could prob just use dest = robAlias here)
+            dest = RAT.lookup(instr.getField1())
+            #check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
+            if dep1 == instr.getField2():
+                dep1 = "None"
+                value1 = intARF.lookup(instr.getField2())
+            if dep2 == instr.getField3():
+                dep2 = "None"
+                value2 = intARF.lookup(instr.getField3())
+                
+            #also need to check if values are ready immediately within the ROB
+            if ROB.searchEntries(dep1) != None:
+                #if the value returned is not None, then a value has been produced and may be used
+                value1 = ROB.searchEntries(dep1)
+                dep1 = "None"
+            if ROB.searchEntries(dep2) != None:
+                #if the value returned is not None, then a value has been produced and may be used
+                value2 = ROB.searchEntries(dep2)
+                dep2 = "None"
+            
+        else: #else, it is a branch, structured as bne/beq Rs, Rt, offset -> comparing Rs to Rt so need to determine deps and values on fields 1 and 2
+            #grab dependencies and destination, don't need to worry about register renaming for branches
+            dep1 = RAT.lookup(instr.getField1())
+            dep2 = RAT.lookup(instr.getField2())
+            dest = RAT.lookup(instr.getField1())
+            #check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
+            if dep1 == instr.getField1():
+                dep1 = "None"
+                value1 = intARF.lookup(instr.getField1())
+            if dep2 == instr.getField2():
+                dep2 = "None"
+                value2 = intARF.lookup(instr.getField2())
+                
+            #also need to check if values are ready immediately within the ROB
+            if ROB.searchEntries(dep1) != None:
+                #if the value returned is not None, then a value has been produced and may be used
+                value1 = ROB.searchEntries(dep1)
+                dep1 = "None"
+            if ROB.searchEntries(dep2) != None:
+                #if the value returned is not None, then a value has been produced and may be used
+                value2 = ROB.searchEntries(dep2)
+                dep2 = "None"
         
         #now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
         self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr)
@@ -206,7 +248,8 @@ class IntAdder(unitWithRS):
         result = None
         if self.rs[self.currentExe].fetchOp() == "ADD":
             result = self.rs[self.currentExe].fetchValue1() + self.rs[self.currentExe].fetchValue2()
-        elif self.rs[self.currentExe].fetchOp() == "SUB":
+        elif self.rs[self.currentExe].fetchOp() == "SUB" or self.rs[self.currentExe].fetchOp() == "BEQ" or self.rs[self.currentExe].fetchOp() == "BNE":
+            #use subtraction for branch instructions as well, BEQ if Rs - Rt = 0 and BNE if Rs - Rt != 0
             result = self.rs[self.currentExe].fetchValue1() - self.rs[self.currentExe].fetchValue2()
         
         

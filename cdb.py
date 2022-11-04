@@ -57,15 +57,21 @@ class CommonDataBus:
 
             #update instruction wbCycle
             wbStation.fetchInstr().setWbCycle(cycle)
+            #want to save the instr before it is deleted in case it was a branch or ld/sd
+            instr = wbStation.fetchInstr()
 
             #update all RS in all units (unit should delete station entry)
             self.intAdder.writebackRS(wbStation, wbValue)
             #fpadder
             #fpmult
             #etc
-
-            #update ROB entry
-            self.ROB.writebackROB(wbDest, wbValue, cycle)
+            
+            #update ROB entry, need special cases for branches and loads/stores since they're not "conventional" instrs
+            if instr.getType() == "BNE" or instr.getType() == "BEQ":
+                #don't actually need to WB a branch
+                self.ROB.writebackROBBranch(instr, cycle)
+            else:
+                self.ROB.writebackROB(wbDest, wbValue, cycle)
 
             #remove from whichever CDB buffer it came from
             if buff in self.intAddBuff: self.intAddBuff.remove(buff)

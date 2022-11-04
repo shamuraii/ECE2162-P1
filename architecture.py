@@ -26,9 +26,10 @@ class RegisterAliasTable:
             
     def clearEntry(self, alias):
         # If the alias is present in table, clear it
+        #print("trying to clear alias ", alias)
         for key,value in self.entries.items():
             if value == alias:
-                value = key
+                self.entries[key] = key
 
     #method to lookup registers
     def lookup(self, register):
@@ -44,7 +45,7 @@ class RegisterAliasTable:
         return '\n'.join([str(key, ' : ', value) for key, value in self.entries.items()])
 
 class Instruction:
-    def __init__(self, type, field1, field2, field3):
+    def __init__(self, type, field1, field2, field3, PC):
         self.type = type
         self.field1 = field1
         self.field2 = field2
@@ -54,6 +55,7 @@ class Instruction:
         self.memCycle = ("X", "X") # (start,end) tuple
         self.wbCycle = "X"
         self.comCycle = "X"
+        self.PC = PC #adding the PC of an instr for ease of resolving/committing branches later
      
     #getters for each part of the instruction
     def getType(self):
@@ -67,6 +69,9 @@ class Instruction:
     
     def getField3(self):
         return self.field3
+        
+    def getPC(self):
+        return self.PC
 
     def setIsCycle(self, val):
         self.isCycle = val
@@ -203,6 +208,10 @@ class ReservationStationEntry:
 
     def fetchInstr(self) -> Instruction:
         return self.instr
+        
+    #a debug method
+    def fetchDone(self):
+        return self.done
     
     #creating update methods for each because we do not know what will be set initially
     #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
@@ -244,9 +253,10 @@ class ROBEntry:
     def __init__(self, op, dest, instr):
         self.op = op
         self.dest = dest
+        self.robDest = None #keeping both robDest and dest to know both the original reg as well as the renamed version - helps resolving names in RAT
         self.value = None
         self.done = 0
-        self.doneCycle = 0
+        self.doneCycle = 0 
         self.instr = instr #references the actual Instruction object this entry represents (For saving timing purposes only)
 
     def __str__(self) -> str:
@@ -279,6 +289,14 @@ class ROBEntry:
 
     def getInstr(self):
         return self.instr
+        
+    def getRobDest(self):
+        return self.robDest
+        
+    #using this to update the destination of the ROBEntry to the "ROBX" counterpart instead of "RX" since there are alias clearing issues otherwise
+    def updateRobDest(self, newName):
+        self.robDest = newName
+        
 
 
 class ReorderBuffer:
@@ -302,6 +320,8 @@ class ReorderBuffer:
         # Add new entry at head and increment head
         self.entries[self.head] = ROBEntry(op, dest, instr)
         outstr = "ROB" + str(self.head)
+        #update the destination with the ROB version of the register 
+        self.entries[self.head].updateRobDest(outstr)
         self.head = (self.head + 1) % self.length
         # return "ROB#" where entry was added
         return outstr
@@ -317,6 +337,17 @@ class ReorderBuffer:
         for idx, entry in enumerate(self.entries):
             if str("ROB"+str(idx)) == cdbDest:
                 entry.updateValue(cdbValue, doneCycle)
+                
+    #using a separate method just for branches to mark as done
+    def writebackROBBranch(self, oldestInstr, doneCycle):
+        #loop through all ROB entries
+        for idx, entry in enumerate(self.entries):
+            #search for branch that matches the PC
+            if entry != None:
+                #print("PC = ", entry.getInstr().getPC(), " compPC = ", PC, " instr.getType() = ", instr.getType(), " entry.getInstr() = ", entry.getInstr().getType())
+                if oldestInstr.getPC() == entry.getInstr().getPC(): #find the entry of the oldest ROB instr (which is a branch) by its PC
+                    entry.updateValue(None, doneCycle)
+                
 
     def getOldestEntry(self) -> ROBEntry:
         # Return the oldest instruction (could be None)
@@ -326,7 +357,15 @@ class ReorderBuffer:
         if self.isEmpty(): raise Exception("Attempting to remove entry from EMPTY ROB!")
         self.entries[self.tail] = None
         self.tail = (self.tail + 1) % self.length
+        
+    #method to search the ROB and find if a value is ready for use that has not yet been committed
+    def searchEntries(self, alias):
+        #search through entire ROB
+        for entry in self.entries:
+            #make sure entry exists
+            if entry != None:
+                #check if the ROB entry we need is there and has the value ready
+                if entry.getRobDest() == alias:
+                    return entry.getValue()
     
-class BranchPredictor:
-    def __init__(self) -> None:
-        pass
+    
