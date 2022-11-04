@@ -37,7 +37,7 @@ class BTB:
     def __init__(self):
         self.entries = [] #the entries in the BTB, will have 8 total
         for i in range(8):
-            self.entries.append(BTBEntry)
+            self.entries.append(BTBEntry())
             
     #populate an entry in the BTB
     def populateEntry(self, entry, PC, targetPC):
@@ -73,7 +73,7 @@ class BranchPredictor:
         #self.BTB.populateEntry(entry, PC, targetPC)
         
     #check if a given PC is predicted as a branch, return -1 if no branch/not taken, or new PC if taken
-    def isBranch(self, PC):
+    def isBranchTaken(self, PC):
         #first grab the entry it should be located in
         entry = self.getEntry(PC)
         #next check if the stored address is the same as the one we're looking at right now

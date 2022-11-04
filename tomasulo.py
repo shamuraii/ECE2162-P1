@@ -45,6 +45,15 @@ def loadInstructions():
         
     return instructions
     
+#method to load instructions into the buffer from a designated PC onward
+def reloadInstructions(instructions, instrBuffer, PC):
+    #first clear instruction buffer after the branch instruction (if not final instruction)
+    instrBuffer.removeInstrs(1) #remove all instructions from index 1 of buffer to the end
+    
+    #go from new PC until end of instructions list and add them to the buffer
+    for instr in instructions[PC:]:
+        instrBuffer.addInstr(instr)   
+    
 def printInstructions(instructions):
     print("Printing instructions...")
     for inst in instructions: print(inst)
@@ -67,7 +76,8 @@ def tryIssueInstr(
     fpARF: units.FloatARF,
     ROB: architecture.ReorderBuffer,
     BP: branchPredictor.BranchPredictor,
-    PC: int
+    PC: int,
+    instructions: architecture.Instruction
 ):
     #get next instruction
     issued = False
@@ -111,6 +121,19 @@ def tryIssueInstr(
             #issue this instruction to the integer adder
             intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB)
             issued = True
+            #in addition to issuing the branch for execution and resolution, need to predict the next PC
+            nextPC = BP.isBranchTaken(PC)
+            #need to create a copy of the RAT in case the branch is mispredicted
+            RAT.createCopy(PC)            
+            
+            #if nextPC == -1, then predict the branch is not taken, so don't modify it, otherwise, change PC to that in BTB
+            #if nextPC != -1:
+                #PC = nextPC
+                #also must reload instructions based on predicted branch
+                #reloadInstructions(instructions, instrBuffer, PC)
+            #if branch is not predicted to be taken, carry on with PC incrementing normally
+            
+    
     else:
         issued = False #TODO, placeholder/example
     
@@ -119,6 +142,9 @@ def tryIssueInstr(
         instr.setIsCycle(cycle)
         instrBuffer.popInstr()
         print(instr, " issued on cycle: ", cycle)
+        
+    #returning issued variable to see if we should increment PC
+    return issued
             
 def checkIfDone(
     instrBuffer: architecture.InstructionBuffer,
@@ -184,7 +210,7 @@ def main():
         instrBuffer.addInstr(entry)
     #print(instrBuffer)     
     print("--------------------")
-
+    
     #cycle variable to keep track of cycle number
     cycle = 0
     #Program counter variable to keep track of where we are in the program & to deal with branches
@@ -199,7 +225,10 @@ def main():
         print("PC: " + str(PC))
     
         #place next instrs available into reservation stations, will also need to rename the registers in this step
-        tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB, BP, PC)
+        issued = tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB, BP, PC, instrList)
+        #if issued the next instr, increase PC
+        if issued == True:
+            PC = PC + 1
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)
@@ -238,7 +267,6 @@ def main():
         isDone = checkIfDone(instrBuffer, ROB)
         
         cycle = cycle + 1
-        PC = PC + 1
         print()
 
         #DEBUG

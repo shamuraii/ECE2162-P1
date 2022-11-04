@@ -2,6 +2,7 @@
 class RegisterAliasTable:
     #using a dict here for unique-ness, can't have 2 R10s for instance
     entries = {}
+    copies = []
     numIntegers = 0
     numFloatingPoints = 0
     def __init__(self, intNum, floatNum) -> None:
@@ -38,6 +39,27 @@ class RegisterAliasTable:
             return self.entries[register]
         else:
             raise Exception("RAT lookup does not exist: " + str(register))
+            
+    #method to create a copy of the RAT for branch purposes
+    def createCopy(self, PC):
+        self.copies.append({PC:self.entries.copy()}) #make it so that the saved RAT is correlated to the branch's PC
+        
+    #method to recover RAT in the event of a misprediction
+    def recoverRAT(self, PC):
+        #search through list to find dictionary with matching PC
+        for dict in self.copies: #grab each dict
+            for key in dict.keys(): #grab keys, should only be one since its {key : {other dict}}
+                if key == PC:
+                    self.entries = dict.get(key).copy() #copy dict from copies into the actual entries slot
+                    #also need to clear any entries that come after this recovered one as they are now stale
+                    del self.copies[self.copies.index(dict):]
+                    
+        
+            
+    #print all copies of the RAT for debug
+    def printCopies(self):
+        for entry in self.copies:
+            print(entry)
             
     #print all registers and their aliases
     def __str__(self):
@@ -124,6 +146,10 @@ class InstructionBuffer:
     def popInstr(self):
         #remove first element (oldest)
         self.buffer.pop(0)
+        
+    #method to remove specific instructions from the buffer - for use with branches
+    def removeInstrs(self, index):
+        del self.buffer[index:] #remove from index to end of list
         
     #method to check if there are entries in the instr
     def isEmpty(self):
