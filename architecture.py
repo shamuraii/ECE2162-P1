@@ -167,10 +167,14 @@ class Instruction:
         self.exCycle = tuple(temp)
 
     def setMemStart(self, val):
-        self.memCycle[0] = val
+        temp = list(self.memCycle)
+        temp[0] = val
+        self.memCycle = tuple(temp)
 
     def setMemEnd(self, val):
-        self.memCycle[1] = val
+        temp = list(self.memCycle)
+        temp[1] = val
+        self.memCycle = tuple(temp)
 
     def setWbCycle(self, val):
         self.wbCycle = val
@@ -382,7 +386,7 @@ class ROBEntry:
     def getDoneCycle(self):
         return self.doneCycle
 
-    def getInstr(self):
+    def getInstr(self) -> Instruction:
         return self.instr
         
     def getRobDest(self):
