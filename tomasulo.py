@@ -234,6 +234,7 @@ def main():
     
     #call instruction method to read txt file
     instrList = loadInstructions()
+    outputList = []
     printInstructions(instrList)
     for entry in instrList:
         instrBuffer.addInstr(entry, None)
@@ -380,22 +381,25 @@ def main():
         #allow rob to commit
         if ROB.canCommit(cycle):
             entry = ROB.getOldestEntry()
-            print("ROB Commit: ", entry.getInstr())
+            comInstr = entry.getInstr()
+            print("ROB Commit: ", comInstr)
 
             #update commit cycle
-            entry.getInstr().setComCycle(cycle)
+            comInstr.setComCycle(cycle)
             
             #don't update ARF and RAT for branches
-            if entry.getInstr().getType() != "BNE" and entry.getInstr().getType() != "BEQ":
+            if comInstr.getType() != "BNE" and comInstr.getType() != "BEQ":
                 # Update ARF
                 if 'R' in entry.getDest():
                     intARF.update(entry.getDest(), entry.getValue())
                 elif 'F' in entry.getDest():
                     fpARF.update(entry.getDest(), entry.getValue())
                 # Remove from RAT if applicable
-                RAT.clearEntry(entry.getRobDest(), entry.getInstr().getPC())
+                RAT.clearEntry(entry.getRobDest(), comInstr.getPC())
             # Remove from ROB
             ROB.deleteOldest()
+            # Add to final output
+            outputList.append(comInstr.copy())
 
         #check if program has issued and committed all instructions
         isDone = checkIfDone(instrBuffer, ROB)
@@ -408,7 +412,7 @@ def main():
             print("Error: DEBUG max cycles.")
             break
 
-    printInstructionsLong(instrList)
+    printInstructionsLong(outputList)
     print(intARF)
     print(fpARF)
 
