@@ -61,7 +61,7 @@ class unitWithRS:
         return -1 #else all RS are found to be busy, return -1 for no RS available
  
     #method to populate the entry of the RS passed in
-    def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr):
+    def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry):
         #populate fields of chosen RS
         self.rs[entry].updateBusy(1) #mark this RS as now being populated/busy doing computation
         self.rs[entry].updateOp(op) #will hold instruction in use
@@ -72,6 +72,8 @@ class unitWithRS:
         self.rs[entry].updateDep2(dep2) #empty or an ROB entry
         self.rs[entry].updateCycle(cycle) #cycle this RS was issued on
         self.rs[entry].updateInstr(instr)
+        #self.rs[entry].updatePC(PC) #PC for this instruction
+        self.rs[entry].updateBranchEntry(branchEntry)
         
     def writebackRS(self, cdbStation, cdbValue):
         cdbDest = cdbStation.fetchDest()
@@ -127,6 +129,21 @@ class unitWithRS:
                 return False #return false as in all entries are NOT empty
         return True #return true if all empty entries 
 
+    #method to clear RS occupied by mispredicted branch instructions
+    def removeSpeculatedInstrs(self, wrongBranches, branchType):
+        #loop through entire RS for each deleted branch looking for matches
+        #looping through incorrect branches
+        for branch in wrongBranches:
+            #looping through RS
+            for RS in self.rs:
+                #not sure if an exception will be thrown for comparing None entries so check that first to short-circuit
+                #using last RS.fetchInstr().getType() != branchType check to not accidentally clear out the branch we're executing
+                if RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
+                    #if this entry is one that should be cleared, do it
+                    self.clearRS(self.rs.index(RS))
+                    
+                    
+
     def printRS(self):
         for station in self.rs: print(station)
 
@@ -143,7 +160,7 @@ class IntAdder(unitWithRS):
             self.rs.append(ReservationStationEntry())
     
     #method to add instruction to the reservation stations - will need to add feature for register renaming
-    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF, robAlias, ROB: ReorderBuffer):
+    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF, robAlias, ROB: ReorderBuffer, PC):
         #find next available RS if there is one - do this first as the rest doesn't matter if no RS available
         nextEntry = self.availableRS()
         if nextEntry == -1:
@@ -210,7 +227,7 @@ class IntAdder(unitWithRS):
                 dep2 = "None"
         
         #now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
-        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr)
+        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
         print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
             
     #method to fetch next ready instr for execution
@@ -235,14 +252,14 @@ class IntAdder(unitWithRS):
     def exeInstr(self, cycle, CDB):
         #first check if an instr is actually in flight, if not, just jump out
         if self.currentExe == -1:
-            return
+            return (-1,-1)
     
         #make sure the cycles executed thus far is still < the # it takes
         if self.cyclesInProgress < self.ex_cycles:
             #increment the count of cycles in exe stage
             self.cyclesInProgress = self.cyclesInProgress + 1
             #return, still need to exe for more cycles
-            return
+            return (-1,-1)
         
         #else, the cycles in exe have completed, compute the actual result and send it over the CDB to ROB and release RS
         result = None
@@ -254,6 +271,9 @@ class IntAdder(unitWithRS):
         
         
         print("Result of ", self.rs[self.currentExe].fetchInstr(), " is ", str(result))
+        #saving these 2 values now before they are cleared, for branch instruction resolution
+        instrPC = self.rs[self.currentExe].fetchInstr().getPC()
+        instrField3 = self.rs[self.currentExe].fetchInstr().getField3()
         
         #send to CDB buffer and clear FU, mark RS done
         CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
@@ -261,6 +281,20 @@ class IntAdder(unitWithRS):
         self.rs[self.currentExe].markDone()
         self.currentExe = -1
         self.cyclesInProgress = 0
+        
+        return (result, instrPC, instrField3)
+        
+    #method to grab the instruction currently being executed (if any)
+    def clearSpeculativeExe(self, entryToClear):
+        #first check if an instr is actually in flight, if not, just jump out
+        if self.currentExe == -1:
+            return -1
+            
+        print("entryToClear = ", entryToClear)
+        
+        #otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
+        if self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
+            self.currentExe = -1
         
     #method to print the instruction in progress and cycle(s) been in exe stage
     def printExe(self):

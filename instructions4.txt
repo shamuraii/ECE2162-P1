@@ -1,0 +1,5 @@
+ADD R1, R2, R3
+SUB R8, R8, R7
+SUB R4, R5, R6
+BEQ R4, R8, -3
+SUB R4, R5, R7

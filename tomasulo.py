@@ -3,6 +3,9 @@ import architecture
 import cdb
 import branchPredictor
 
+#making PC a global for passing/modifying between "main" and "tryIssueInstr"
+PC = 0
+
 def loadInstructions():
     instructions = []
     #open instruction file and read in all lines
@@ -46,13 +49,13 @@ def loadInstructions():
     return instructions
     
 #method to load instructions into the buffer from a designated PC onward
-def reloadInstructions(instructions, instrBuffer, PC):
+def reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, clearIndex):
     #first clear instruction buffer after the branch instruction (if not final instruction)
-    instrBuffer.removeInstrs(1) #remove all instructions from index 1 of buffer to the end
+    instrBuffer.removeInstrs(clearIndex) #remove all instructions from index 1 of buffer to the end
     
     #go from new PC until end of instructions list and add them to the buffer
-    for instr in instructions[PC:]:
-        instrBuffer.addInstr(instr)   
+    for instr in instructions[int(PC):]:
+        instrBuffer.addInstr(instr, speculatedEntry)   
     
 def printInstructions(instructions):
     print("Printing instructions...")
@@ -76,9 +79,9 @@ def tryIssueInstr(
     fpARF: units.FloatARF,
     ROB: architecture.ReorderBuffer,
     BP: branchPredictor.BranchPredictor,
-    PC: int,
     instructions: architecture.Instruction
 ):
+    global PC
     #get next instruction
     issued = False
     instr = instrBuffer.getNext()
@@ -86,13 +89,13 @@ def tryIssueInstr(
     # STEP 1: CHECK INSTRUCTION
     if instr is None:
         print("No instruction issued: Next instruction is 'None'")
-        return
+        return False
 
     # STEP 2: CHECK ROB
     robFull = ROB.isFull()
     if robFull:
         print("No instruction issued: ROB FULL")
-        return
+        return False
     
     # STEP 3: CHECK TYPE, then appropriate RS
     instrType = instr.getType()
@@ -100,38 +103,52 @@ def tryIssueInstr(
         assignedRS = intAdder.availableRS()
         if assignedRS == -1:
             print("No instruction issued: RS full")
-            return
+            return False
         else:
             # STEP 4: RENAMING PROCESS 
             robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
             #need to rename after grabbing dependencies within issueInstruction method, or else trickling dependencies are messed up
             #ie ADD R4,R4,R1 will be correct, but if followed by ADD R4,R4,R2 the dependency will point to this instrs destination and never get forwarded the result
             #RAT.update(instr.getField1(), robAlias) 
-            intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB)
+            intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB, PC)
             issued = True
     elif instrType == "BEQ" or instrType == "BNE":
         #branch instructions are issued into the reservation stations of int ALU
         assignedRS = intAdder.availableRS()
         if assignedRS == -1:
             print("No instruction issued: RS full")
-            return
+            return False
         else:
             #will return ROB alias, but don't actually need it 
             robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
             #issue this instruction to the integer adder
-            intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB)
+            intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB, PC)
             issued = True
             #in addition to issuing the branch for execution and resolution, need to predict the next PC
-            nextPC = BP.isBranchTaken(PC)
-            #need to create a copy of the RAT in case the branch is mispredicted
-            RAT.createCopy(PC)            
+            nextPC = BP.getEntryPC(PC)
+            prediction = BP.getEntryBranchPrediction(PC)
+            #need to create a copy of the RAT in case the branch is mispredicted - return this index for marking which instrs are associated w/ the branch
+            speculatedEntry = RAT.createCopy(PC) 
             
-            #if nextPC == -1, then predict the branch is not taken, so don't modify it, otherwise, change PC to that in BTB
-            #if nextPC != -1:
-                #PC = nextPC
+            if prediction == 1: 
+                print("Issuing branch, predicting taken...")
+            else:
+                print("Issuing branch, predicting NOT taken...")
+            
+            #reload instructions according to how this branch is predicted, may be redundant if they are already loaded
+            #if prediction == 1, then predict the branch is taken, so change PC to that of the one in BTB
+            if prediction == 1:
+                PC = nextPC
                 #also must reload instructions based on predicted branch
-                #reloadInstructions(instructions, instrBuffer, PC)
-            #if branch is not predicted to be taken, carry on with PC incrementing normally
+                reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, 1)
+                #have to sub one from PC now because the issued branch instruction will mess up the PC by +1
+                PC = PC - 1
+            #if branch is predicted to be NOT taken, carry on with PC incrementing normally
+            else:
+                reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, 0)
+            #print("InstrBuffer After")
+            #print(instrBuffer)
+                
             
     
     else:
@@ -156,6 +173,7 @@ def checkIfDone(
 
 
 def main():
+    global PC
     print("ECE 2162 - Project 1","Jefferson Boothe","James Bickerstaff","--------------------",sep="\n")    
 
     print("Loading configuration file...")
@@ -200,6 +218,14 @@ def main():
             intARF.update(pair[0].upper(), int(pair[1])) #update value
         else:
             fpARF.update(pair[0].upper(), float(pair[1])) #update value
+    #MUST STILL PARSE MEMORY VALUES *************************
+    initMemValues = config_lines[9].split(',')
+    #parsing if branch instructions refer to PC in byte (1) or relative format (anything else)
+    PCConfig = config_lines[10].split('=')
+    PCMode = int(PCConfig[1])
+    #print("PCMode = ", PCMode)
+    
+        
         
     f.close()
     
@@ -207,14 +233,19 @@ def main():
     instrList = loadInstructions()
     printInstructions(instrList)
     for entry in instrList:
-        instrBuffer.addInstr(entry)
+        instrBuffer.addInstr(entry, None)
     #print(instrBuffer)     
     print("--------------------")
+    
+    #print("ROB tail = ", ROB.getTail())
+    #print("ROB head = ", ROB.getHead())
     
     #cycle variable to keep track of cycle number
     cycle = 0
     #Program counter variable to keep track of where we are in the program & to deal with branches
     PC = 0
+    #variable to pause Issuing of next instructions in the event of a misprediction, must wait a cycle for correct instrs to be placed within the buffer
+    pauseIssue = False
     #variable to see if done processing yet
     isDone = False
     #go until all instructions are complete
@@ -223,18 +254,118 @@ def main():
         #begin with printing out the current cycle number
         print("Cycle: " + str(cycle))
         print("PC: " + str(PC))
+        
+        #print("InstrBuffer")
+        #print(instrBuffer)
     
-        #place next instrs available into reservation stations, will also need to rename the registers in this step
-        issued = tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB, BP, PC, instrList)
-        #if issued the next instr, increase PC
-        if issued == True:
-            PC = PC + 1
+        #make sure Issuing is not paused due to misprediction, if not, issue next instructions if possible
+        if pauseIssue == False:
+            #place next instrs available into reservation stations, will also need to rename the registers in this step
+            issued = tryIssueInstr(instrBuffer, intAdder, fpAdder, fpMult, lsUnit, cycle, RAT, intARF, fpARF, ROB, BP, instrList)
+            #if issued the next instr, increase PC
+            if issued == True:
+                PC = PC + 1
+        else:
+            #only need to pause issuing for a cycle, free to resume on the next one
+            pauseIssue = False
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)
         
-        #exe instructions for each FU, if possible
-        intAdder.exeInstr(cycle, CDB)
+        #exe instructions for each FU, if possible - using a return tuple to signify result of a branch (-1 if not done, not branch instr, X otherwise)
+        results = intAdder.exeInstr(cycle, CDB)
+        
+        #now check if results has -1s in it or not, tuple goes: (result of calculation, PC of instruction)
+        if results[0] != -1 and results[1] != -1:
+            #values are not invalid values, check result of the branch
+            calculation = results[0]
+            branchPC = results[1] 
+            offset = results[2]
+            #first need whether it is BEQ or BNE
+            branchType = instrList[branchPC].getType()
+            
+            #make sure its a branch here in case something goofy happens down the line with testing
+            if branchType == "BEQ" or branchType == "BNE":
+                #print("Branch PC = ", branchPC)
+                #print("BTB")
+                #BP.print()
+            
+                #now check result accordingly
+                #check the BP to see if this branch was predicted to be taken or not (returns expected PC)
+                prediction = BP.getEntryBranchPrediction(branchPC)
+                #bool holding actual result of the branch
+                wasBranchTaken = None
+                #bool for if we made the correct prediction 
+                misprediction = False
+                #check if op is BEQ or BNE first
+                if branchType == "BEQ":
+                    #find if branch is actually taken by looking at result of EXE stage
+                    wasBranchTaken = (calculation == 0)
+                elif branchType == "BNE":
+                    #find if branch is actually taken by looking at result of EXE stage
+                    wasBranchTaken = (calculation != 0)    
+                    
+                #need to compare 2 cases: predicted taken and predicted not taken
+                if prediction == 1:
+                    #misprediction is true if we predicted taken and it was NOT taken
+                    misprediction = (wasBranchTaken == False)
+                else:
+                    #misprediction is true if we predicted NOT taken and it was taken
+                    misprediction = (wasBranchTaken == True)
+                
+                #print("prediction = ", prediction)
+                #print("misprediction = ", misprediction)
+                #print("wasBranchTaken = ", wasBranchTaken)
+                
+                #case of misprediction - predicted don't take it and branch was supposed to be taken
+                if misprediction == True:
+                    print("Branch mispredicted, recovering...")
+                    #mispredicted this branch, need to recover:
+                    #1. recover the rat
+                    RSEntriesToClear = RAT.recoverRAT(branchPC)
+                    #print("Recovered RAT")
+                    #RAT.print()
+                    
+                    #2. clear speculative RS entries
+                    #print("Before")
+                    #intAdder.printRS()
+                    intAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
+                    #print("After")
+                    #intAdder.printRS()
+                    #WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
+                    
+                    #3. clear ROB entries following the branch
+                    ROB.clearSpeculatedEntries(branchPC)
+                    
+                    #4. update BTB
+                    #print("BTB Before")
+                    #BP.print()
+                    BP.updateBTB(branchPC, wasBranchTaken, offset, PCMode) 
+                    #print("BTB after")
+                    #BP.print()
+                    
+                    #5. reset the PC to correct value
+                    #print("PC before")
+                    #print(PC)
+                    PC = BP.getEntryPC(branchPC) #since branch should not have been taken, jump to calculated PC
+                    #print("PC after")
+                    #print(PC)
+                    
+                    #6. clear any executing speculated instructions from FUs - kill their exe in its tracks
+                    intAdder.clearSpeculativeExe(RSEntriesToClear)
+                    #WILL NEED TO DO THIS FOR ALL OTHER UNITS ****************
+                    
+                    #7. fetch correct instructions
+                    #print("InstrBuffer Before")
+                    #print(instrBuffer)
+                    if wasBranchTaken == True:
+                        reloadInstructions(instrList, instrBuffer, PC, None, 1) #not passing a speculatedEntry, as this is the correct instr path now
+                    else:
+                        reloadInstructions(instrList, instrBuffer, PC, None, 0) #not passing a speculatedEntry, as this is the correct instr path now
+                    #print("InstrBuffer After")
+                    #print(instrBuffer)
+                    #this will take the next cycle to complete, resume fetching on x+2 cycles
+                    pauseIssue = True
         
         #print instruction in execution for FUs - debug
         #intAdder.printExe()
@@ -259,7 +390,7 @@ def main():
                 elif 'F' in entry.getDest():
                     fpARF.update(entry.getDest(), entry.getValue())
                 # Remove from RAT if applicable
-                RAT.clearEntry(entry.getRobDest())
+                RAT.clearEntry(entry.getRobDest(), entry.getInstr().getPC())
             # Remove from ROB
             ROB.deleteOldest()
 

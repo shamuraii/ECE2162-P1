@@ -25,12 +25,37 @@ class RegisterAliasTable:
         else:
             raise Exception("REGISTER " + register + " INVALID - CANNOT UPDATE RAT")
             
-    def clearEntry(self, alias):
+    def clearEntry(self, alias, PC):
+        savedName = None
         # If the alias is present in table, clear it
         #print("trying to clear alias ", alias)
         for key,value in self.entries.items():
             if value == alias:
                 self.entries[key] = key
+                savedName = key
+        
+        found = False
+        #also need to look through RAT copies for the nearest copy made with a higher PC
+        #search through list to find dictionary with matching PC
+        for dict in self.copies: #grab each dict
+            for key,value in dict.items():
+                for key2,value2 in value.items():
+                    #print("Key = ", key, " key2 = ", key2)
+                    #print("PC = ", PC, " key > PC? ", key > PC)
+                    #print("Value = ", value2, " alias = ", alias, " equal? ", value2 == alias)
+                    if value2 == alias:
+                        if key > PC:
+                            #found desired PC, modify the entry in the saved checkpoint
+                            #print("Changing ", dict.get(key)[key2], " to ", key2)
+                            dict.get(key)[key2] = key2
+                            #print("dict.get(key)[key2] = ", dict.get(key)[key2])
+                            found = True
+                            break
+                if found == True:
+                    break 
+            if found == True:
+                break
+                    
 
     #method to lookup registers
     def lookup(self, register):
@@ -43,16 +68,39 @@ class RegisterAliasTable:
     #method to create a copy of the RAT for branch purposes
     def createCopy(self, PC):
         self.copies.append({PC:self.entries.copy()}) #make it so that the saved RAT is correlated to the branch's PC
+        return len(self.copies)-1 #return index of this copy
         
     #method to recover RAT in the event of a misprediction
     def recoverRAT(self, PC):
+        #using this var to grab the location in the copies array that needs deletion and those that follow - doing outside the loop for reasons
+        deletionLocation = None
+        #list containing which RS stations related to incorrect branches will need to be cleared, may have multiple chaining branches that need cleared
+        entriesToClear = []
+        #using a bool for noting when deletion entry is found
+        entryFound = False
         #search through list to find dictionary with matching PC
         for dict in self.copies: #grab each dict
             for key in dict.keys(): #grab keys, should only be one since its {key : {other dict}}
                 if key == PC:
                     self.entries = dict.get(key).copy() #copy dict from copies into the actual entries slot
-                    #also need to clear any entries that come after this recovered one as they are now stale
-                    del self.copies[self.copies.index(dict):]
+                    #also need to clear any entries that come after this recovered one as they are now stale, so save this index
+                    deletionLocation = self.copies.index(dict)
+                    entryFound = True
+                if entryFound == True:
+                    #add this value to the RS entries to clear variable
+                    entriesToClear.append(self.copies.index(dict))
+        #now delete the appropriate entries
+        del self.copies[deletionLocation:]
+        #return the list of entries that need clearing
+        return entriesToClear
+                    
+    #method to clear a RAT copy once branch is resolved and prediction was correct
+    def clearCopy(self, PC):
+        #search through list to find dictionary with matching PC
+        for dict in self.copies: #grab each dict
+            for key in dict.keys(): #grab keys, should only be one since its {key : {other dict}}
+                if key == PC:
+                    self.entries.pop(self.copies.index(dict)) #pop this entry to remove
                     
         
             
@@ -61,6 +109,12 @@ class RegisterAliasTable:
         for entry in self.copies:
             print(entry)
             
+            
+    def print(self):
+        for key, value in self.entries.items():
+            print(str(key), " : ", str(value))
+            
+    #print machine dont work    
     #print all registers and their aliases
     def __str__(self):
         #print all int reg aliases
@@ -78,6 +132,7 @@ class Instruction:
         self.wbCycle = "X"
         self.comCycle = "X"
         self.PC = PC #adding the PC of an instr for ease of resolving/committing branches later
+        self.branchEntry = None #using this for when the instr will need to be cleared from RS if branch is mispredicted
      
     #getters for each part of the instruction
     def getType(self):
@@ -94,6 +149,9 @@ class Instruction:
         
     def getPC(self):
         return self.PC
+        
+    def getBranchEntry(self):
+        return self.branchEntry
 
     def setIsCycle(self, val):
         self.isCycle = val
@@ -119,6 +177,9 @@ class Instruction:
 
     def setComCycle(self, val):
         self.comCycle = val
+        
+    def setBranchEntry(self, val):
+        self.branchEntry = val
     
     #print statement for instruction
     def __str__(self) -> str:
@@ -139,7 +200,8 @@ class InstructionBuffer:
         self.length = length
                 
     #method to add an instruction directly, adds to the end of buffer
-    def addInstr(self, instr):
+    def addInstr(self, instr, speculatedEntry):
+        instr.setBranchEntry(speculatedEntry)
         self.buffer.append(instr)
     
     #method to empty a buffer entry for later reuse
@@ -183,6 +245,7 @@ class ReservationStationEntry:
         self.cycle = 0 #holds cycle issued to ensure we do not issue and begin execution on same cycle 
         self.instr = None #references the actual Instruction object this entry represents (For saving timing purposes only)
         self.done = 0 #signals that it already executed (could be waiting for CDB to writeback)
+        self.branchEntry = None #branch that speculated the instruction this reservation station is holding
     
     def __str__(self):
         return "\t".join(str(i) for i in [self.op, self.dest, self.value1, self.value2, self.dep1, self.dep2, self.addr])
@@ -238,6 +301,9 @@ class ReservationStationEntry:
     #a debug method
     def fetchDone(self):
         return self.done
+                
+    def fetchBranchEntry(self):
+        return self.branchEntry
     
     #creating update methods for each because we do not know what will be set initially
     #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
@@ -271,6 +337,9 @@ class ReservationStationEntry:
 
     def updateInstr(self, newInstr):
         self.instr = newInstr
+                
+    def updateBranchEntry(self, newBranchEntry):
+        self.branchEntry = newBranchEntry
 
     def markDone(self):
         self.done = 1
@@ -286,7 +355,7 @@ class ROBEntry:
         self.instr = instr #references the actual Instruction object this entry represents (For saving timing purposes only)
 
     def __str__(self) -> str:
-        return "\t".join([self.op, self.dest, self.value, self.done])
+        return "\t".join([str(self.op), str(self.dest), str(self.value), str(self.done)])
 
     def updateValue(self, newValue, cycle):
         if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join([self.op, self.dest, self.value]))
@@ -331,6 +400,9 @@ class ReorderBuffer:
         self.entries = [None] * length
         self.head = 0
         self.tail = 0
+        
+    def __str__(self):
+        return '\n'.join(str(entry) for entry in self.entries[self.tail:self.head])
 
     def isEmpty(self) -> bool:
         # If oldest instruction is None, all are None
@@ -339,6 +411,12 @@ class ReorderBuffer:
     def isFull(self) -> bool:
         # head=tail means empty or full, if head is a valid entry, then full
         return (self.head == self.tail and self.entries[self.head] != None)
+        
+    def getTail(self):
+        return self.tail
+        
+    def getHead(self):
+        return self.head
 
     def addEntry(self, op, dest, instr) -> str:
         # Shouldn't occur, Check ROB before adding. This functionality could be changed though
@@ -393,5 +471,50 @@ class ReorderBuffer:
                 #check if the ROB entry we need is there and has the value ready
                 if entry.getRobDest() == alias:
                     return entry.getValue()
+                    
+    #method  to clear a given entry, useful in deleting incorrectly predicted instructions
+    def clearEntry(self, entry):
+        if self.isEmpty(): raise Exception("Attempting to remove entry from EMPTY ROB!")
+        self.entries[entry] = None
+        self.head = (self.head - 1)#may produce a negative value
+        #if head was 0 and became -1, make it become the last index in the list
+        if self.head == -1:
+            self.head = self.length - 1
+                    
+    #method to clear all ROB entries past a given entry - used for clearing speculated instructions
+    def clearSpeculatedEntries(self, PC):
+        tail = self.getTail()
+        head = self.getHead()
+        #using a Bool to know if we need to check from additional entries in event that the ROB has wrapped around
+        #e.g. Tail = index 6, Head = index 2 - possible since it is a circular buffer
+        checkStart = True
+        deleteFollowing = False
+        #search through entire ROB oldest -> youngest to find the desired entry
+        #first searching from tail (oldest instruction) to end of the ROB
+        for entry in self.entries[tail:]:
+            #if the entry is none, we've hit the end, so break
+            if entry == None:
+                #no need to check from beginning of the list to tail now, so mark Bool as False
+                checkStart = False
+                break
+            #check if this is an entry that needs to be cleared
+            if deleteFollowing == True:
+                self.clearEntry(self.entries.index(entry))
+            #check if this is the mispredicted branch instruction
+            if entry.getInstr().getPC() == PC:
+                #this is the instruction that mispredicted, clear all that follow it
+                deleteFollowing = True
+                
+        #if we need to go through rest of circular buffer start -> Tail, do so
+        if checkStart == True:
+            for entry in self.entries[0:tail]:
+                #check if this is an entry that needs to be cleared
+                if deleteFollowing == True:
+                    self.clearEntry(self.entries.index(entry))
+                #check if this is the mispredicted branch instruction
+                if entry.getInstr().getPC() == PC:
+                    #this is the instruction that mispredicted, clear all that follow it
+                    deleteFollowing = True
+            
     
     
