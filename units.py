@@ -177,7 +177,24 @@ class IntAdder(unitWithRS):
         value2 = None
         
         #if it is a traditional add/sub, figure out dependencies and values based on fields 2 and 3
-        if instr.getType() != "BEQ" and instr.getType() != "BNE":
+        if instr.getType() == "ADDI":
+            # Only 1 dependency, field 3 is immediate, otherwise same as ADD/SUB procedure below
+            dep1 = RAT.lookup(instr.getField2())
+            RAT.update(instr.getField1(), robAlias)
+            dest = RAT.lookup(instr.getField1())
+            if dep1 == instr.getField2():
+                dep1 = "None"
+                value1 = intARF.lookup(instr.getField2())
+            # Place immediate value
+            dep2 = "None"
+            value2 = int(instr.getField3())
+            # Check ROB if value is ready immediately
+            if ROB.searchEntries(dep1) != None:
+                #if the value returned is not None, then a value has been produced and may be used
+                value1 = ROB.searchEntries(dep1)
+                dep1 = "None"
+
+        elif instr.getType() != "BEQ" and instr.getType() != "BNE":
             #need to grab deps before updating RAT, or else the dependency may be overwritten by the new ROB alias
             dep1 = RAT.lookup(instr.getField2())
             dep2 = RAT.lookup(instr.getField3())
@@ -263,9 +280,10 @@ class IntAdder(unitWithRS):
         
         #else, the cycles in exe have completed, compute the actual result and send it over the CDB to ROB and release RS
         result = None
-        if self.rs[self.currentExe].fetchOp() == "ADD":
+        curOp = self.rs[self.currentExe].fetchOp()
+        if curOp == "ADD" or curOp == "ADDI":
             result = self.rs[self.currentExe].fetchValue1() + self.rs[self.currentExe].fetchValue2()
-        elif self.rs[self.currentExe].fetchOp() == "SUB" or self.rs[self.currentExe].fetchOp() == "BEQ" or self.rs[self.currentExe].fetchOp() == "BNE":
+        elif curOp == "SUB" or curOp == "BEQ" or curOp == "BNE":
             #use subtraction for branch instructions as well, BEQ if Rs - Rt = 0 and BNE if Rs - Rt != 0
             result = self.rs[self.currentExe].fetchValue1() - self.rs[self.currentExe].fetchValue2()
         

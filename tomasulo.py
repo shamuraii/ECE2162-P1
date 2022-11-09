@@ -102,7 +102,7 @@ def tryIssueInstr(
     
     # STEP 3: CHECK TYPE, then appropriate RS
     instrType = instr.getType()
-    if instrType == "ADD" or instrType == "SUB":
+    if instrType == "ADD" or instrType == "ADDI" or instrType == "SUB":
         assignedRS = intAdder.availableRS()
         if assignedRS == -1:
             print("No instruction issued: RS full")
@@ -150,11 +150,10 @@ def tryIssueInstr(
             else:
                 reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, 0)
             #print("InstrBuffer After")
-            #print(instrBuffer)
-                
-            
+            #print(instrBuffer)    
     
     else:
+        print(instrType, " not implemented yet, cannot issue.")
         issued = False #TODO, placeholder/example
     
     # STEP 5: POP BUFFER, SAVE CYCLE INFO
