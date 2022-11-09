@@ -50,6 +50,9 @@ def loadInstructions():
     
 #method to load instructions into the buffer from a designated PC onward
 def reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, clearIndex):
+    #if we are to use the current method of using the instrList as the means of keeping track of IS/EX/MEM/WB/COM cycles,
+    #should probably modify the list in this method to add on the new instructions
+    
     #first clear instruction buffer after the branch instruction (if not final instruction)
     instrBuffer.removeInstrs(clearIndex) #remove all instructions from index 1 of buffer to the end
     
