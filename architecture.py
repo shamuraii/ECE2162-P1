@@ -133,6 +133,18 @@ class Instruction:
         self.comCycle = "X"
         self.PC = PC #adding the PC of an instr for ease of resolving/committing branches later
         self.branchEntry = None #using this for when the instr will need to be cleared from RS if branch is mispredicted
+
+    def copy(self):
+        outInstr = Instruction(self.type, self.field1, self.field2, self.field3, self.PC)
+        outInstr.setIsCycle(self.isCycle)
+        outInstr.setExStart(self.exCycle[0])
+        outInstr.setExEnd(self.exCycle[1])
+        outInstr.setMemStart(self.memCycle[0])
+        outInstr.setMemEnd(self.memCycle[1])
+        outInstr.setWbCycle(self.wbCycle)
+        outInstr.setComCycle(self.comCycle)
+        outInstr.setBranchEntry(self.branchEntry)
+        return outInstr
      
     #getters for each part of the instruction
     def getType(self):
