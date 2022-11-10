@@ -75,21 +75,24 @@ class unitWithRS:
         #self.rs[entry].updatePC(PC) #PC for this instruction
         self.rs[entry].updateBranchEntry(branchEntry)
         
-    def writebackRS(self, cdbStation, cdbValue):
+    def writebackVals(self, cdbStation, cdbValue):
         cdbDest = cdbStation.fetchDest()
         for entry in self.rs:
-            #check dep 1 for match
-            if entry.fetchDep1() == cdbDest:
-                entry.updateValue1(cdbValue)
-                entry.updateDep1("None")
-            #check dep 2 for match
-            if entry.fetchDep2() == cdbDest:
-                entry.updateValue2(cdbValue) 
-                entry.updateDep2("None")  
-            #clear entry if its the one being WrittenBack
+            if entry.checkBusy() == 1:
+                #check dep 1 for match
+                if entry.fetchDep1() == cdbDest:
+                    entry.updateValue1(cdbValue)
+                    entry.updateDep1("None")
+                #check dep 2 for match
+                if entry.fetchDep2() == cdbDest:
+                    entry.updateValue2(cdbValue) 
+                    entry.updateDep2("None")  
+
+    def writebackClear(self, cdbStation):
+        #clear entry if its the one being WrittenBack
+        for entry in self.rs:
             if entry is cdbStation:
                 entry.clearEntry()
-            
 
     #method to check each RS for the requested dependency, returns entry if there is a dependency, or -1 if there is not
     def checkDependencies(self, depCheck):
@@ -271,10 +274,10 @@ class IntAdder(unitWithRS):
         if self.currentExe == -1:
             return (-1,-1)
     
+        #increment the count of cycles in exe stage
+        self.cyclesInProgress = self.cyclesInProgress + 1
         #make sure the cycles executed thus far is still < the # it takes
         if self.cyclesInProgress < self.ex_cycles:
-            #increment the count of cycles in exe stage
-            self.cyclesInProgress = self.cyclesInProgress + 1
             #return, still need to exe for more cycles
             return (-1,-1)
         
@@ -327,16 +330,93 @@ class IntAdder(unitWithRS):
     def __str__(self) -> str:
         pass
 
-
+#float adder is pipelined
 class FloatAdder(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
         self.rs_count = rs_count
         self.ex_cycles = ex_cycles
         self.fu_count = fu_count
         self.rs = []
+        self.executing = [-1] * rs_count # corresponds to the stage of each RS in execution
         for _ in range(rs_count):
             self.rs.append(ReservationStationEntry())
             
+    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, fpARF: FloatARF, robAlias, ROB: ReorderBuffer, PC):
+        # mostly similar to integer adder, only commenting on differences
+        nextEntry = self.availableRS()
+        if nextEntry == -1:
+            raise Exception("FpAdder attempting to issue with no available RS")
+        
+        # dont need to check type, both add/sub behave the same
+        dep1 = RAT.lookup(instr.getField2())
+        dep2 = RAT.lookup(instr.getField3())
+        value1 = None
+        value2 = None
+        RAT.update(instr.getField1(), robAlias)
+        dest = RAT.lookup(instr.getField1())
+        if dep1 == instr.getField2():
+            dep1 = "None"
+            value1 = fpARF.lookup(instr.getField2())
+        if dep2 == instr.getField3():
+            dep2 = "None"
+            value2 = fpARF.lookup(instr.getField3())
+
+        if ROB.searchEntries(dep1) != None:
+            value1 = ROB.searchEntries(dep1)
+            dep1 = "None"
+        if ROB.searchEntries(dep2) != None:
+            value2 = ROB.searchEntries(dep2)
+            dep2 = "None"
+
+        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+        print("FpAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
+    
+    def fetchNext(self, cycle):
+        #loop through RS to find an entry ready to execute, prioritize oldest
+        for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
+            idx = self.rs.index(entry)
+            if self.executing[idx] != -1:
+                continue
+            elif entry.canExecute(cycle):
+                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
+                self.executing[idx] = 0
+                entry.fetchInstr().setExStart(cycle)
+                break
+
+    def exeInstr(self, cycle, CDB):
+        done = False
+        for idx, exe in enumerate(self.executing):
+            # check if executing
+            if exe == -1:
+                continue
+            self.executing[idx] += 1
+            # check if not finished
+            if self.executing[idx] < self.ex_cycles:
+                continue
+            
+            # it has finished
+            if done:
+                raise Exception("Two instructions finished at same time in FpAdder, cycle: " + str(cycle))
+            done = True
+            result = None
+            curOp = self.rs[idx].fetchOp()
+            if curOp == "ADD.D":
+                result = self.rs[idx].fetchValue1() + self.rs[idx].fetchValue2()
+            else:
+                result = self.rs[idx].fetchValue1() - self.rs[idx].fetchValue2()
+            print("Result of ", self.rs[idx].fetchInstr(), " is ", str(result))
+
+            CDB.newFpAdd(self.rs[idx], result, cycle)
+            self.rs[idx].fetchInstr().setExEnd(cycle)
+            self.rs[idx].markDone()
+            self.executing[idx] = -1
+
+    def clearSpeculativeExe(self, entryToClear):
+        for idx, exe in enumerate(self.executing):
+            # check if the instr is a recently resolved mispredicted branch
+            if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+                self.executing[idx] = -1
+
 
 class FloatMult(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
@@ -344,8 +424,85 @@ class FloatMult(unitWithRS):
         self.ex_cycles = ex_cycles
         self.fu_count = fu_count
         self.rs = []
+        self.executing = [-1] * rs_count # corresponds to the stage of each RS in execution
         for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())            
+            self.rs.append(ReservationStationEntry())        
+
+    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, fpARF: FloatARF, robAlias, ROB: ReorderBuffer, PC):
+        # mostly similar to integer adder, only commenting on differences
+        nextEntry = self.availableRS()
+        if nextEntry == -1:
+            raise Exception("FpMult attempting to issue with no available RS")
+        
+        # dont need to check type, both add/sub behave the same
+        dep1 = RAT.lookup(instr.getField2())
+        dep2 = RAT.lookup(instr.getField3())
+        value1 = None
+        value2 = None
+        RAT.update(instr.getField1(), robAlias)
+        dest = RAT.lookup(instr.getField1())
+        if dep1 == instr.getField2():
+            dep1 = "None"
+            value1 = fpARF.lookup(instr.getField2())
+        if dep2 == instr.getField3():
+            dep2 = "None"
+            value2 = fpARF.lookup(instr.getField3())
+
+        if ROB.searchEntries(dep1) != None:
+            value1 = ROB.searchEntries(dep1)
+            dep1 = "None"
+        if ROB.searchEntries(dep2) != None:
+            value2 = ROB.searchEntries(dep2)
+            dep2 = "None"
+
+        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+        print("FpMult RS ", str(nextEntry), " update: ", self.rs[nextEntry])
+    
+    def fetchNext(self, cycle):
+        #loop through RS to find an entry ready to execute, prioritize oldest
+        for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
+            idx = self.rs.index(entry)
+            if self.executing[idx] != -1:
+                continue
+            elif entry.canExecute(cycle):
+                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
+                self.executing[idx] = 0
+                entry.fetchInstr().setExStart(cycle)
+                break
+
+    def exeInstr(self, cycle, CDB):
+        done = False
+        for idx, exe in enumerate(self.executing):
+            # check if executing
+            if exe == -1:
+                continue
+            self.executing[idx] += 1
+            # check if not finished
+            if self.executing[idx] < self.ex_cycles:
+                continue
+            
+            # it has finished
+            if done:
+                raise Exception("Two instructions finished at same time in FpMult, cycle: " + str(cycle))
+            done = True
+            result = None
+            curOp = self.rs[idx].fetchOp()
+            if curOp == "MULT.D":
+                result = float(self.rs[idx].fetchValue1()) * float(self.rs[idx].fetchValue2())
+            else:
+                raise Exception("FpMult attempting to execute made-up op: " + str(curOp))
+            print("Result of ", self.rs[idx].fetchInstr(), " is ", str(result))
+
+            CDB.newFpMult(self.rs[idx], result, cycle)
+            self.rs[idx].fetchInstr().setExEnd(cycle)
+            self.rs[idx].markDone()
+            self.executing[idx] = -1
+
+    def clearSpeculativeExe(self, entryToClear):
+        for idx, exe in enumerate(self.executing):
+            # check if the instr is a recently resolved mispredicted branch
+            if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+                self.executing[idx] = -1
 
 class MemoryUnit(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:

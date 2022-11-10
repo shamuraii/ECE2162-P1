@@ -105,7 +105,7 @@ def tryIssueInstr(
     if instrType == "ADD" or instrType == "ADDI" or instrType == "SUB":
         assignedRS = intAdder.availableRS()
         if assignedRS == -1:
-            print("No instruction issued: RS full")
+            print("No instruction issued: IntAdder RS full")
             return False
         else:
             # STEP 4: RENAMING PROCESS 
@@ -119,7 +119,7 @@ def tryIssueInstr(
         #branch instructions are issued into the reservation stations of int ALU
         assignedRS = intAdder.availableRS()
         if assignedRS == -1:
-            print("No instruction issued: RS full")
+            print("No instruction issued: IntAdder RS full")
             return False
         else:
             #will return ROB alias, but don't actually need it 
@@ -151,7 +151,24 @@ def tryIssueInstr(
                 reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, 0)
             #print("InstrBuffer After")
             #print(instrBuffer)    
-    
+    elif instrType == "ADD.D" or instrType == "SUB.D":
+        assignedRS = fpAdder.availableRS()
+        if assignedRS == -1:
+            print("No instruction issued: FpAdder RS full")
+            return False
+        else: 
+            robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
+            fpAdder.issueInstruction(instr, cycle, RAT, fpARF, robAlias, ROB, PC)
+            issued = True
+    elif instrType == "MULT.D":
+        assignedRS = fpMult.availableRS()
+        if assignedRS == -1:
+            print("No instruction issued: FpMult RS full")
+            return False
+        else: 
+            robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
+            fpMult.issueInstruction(instr, cycle, RAT, fpARF, robAlias, ROB, PC)
+            issued = True
     else:
         print(instrType, " not implemented yet, cannot issue.")
         issued = False #TODO, placeholder/example
@@ -274,10 +291,14 @@ def main():
     
         #fetch next instrs for the FUs, if possible
         intAdder.fetchNext(cycle)
+        fpAdder.fetchNext(cycle)
+        fpMult.fetchNext(cycle)
         
         #exe instructions for each FU, if possible - using a return tuple to signify result of a branch (-1 if not done, not branch instr, X otherwise)
         results = intAdder.exeInstr(cycle, CDB)
-        
+        fpAdder.exeInstr(cycle, CDB)
+        fpMult.exeInstr(cycle, CDB)
+
         #now check if results has -1s in it or not, tuple goes: (result of calculation, PC of instruction)
         if results[0] != -1 and results[1] != -1:
             #values are not invalid values, check result of the branch
@@ -333,6 +354,8 @@ def main():
                     #print("Before")
                     #intAdder.printRS()
                     intAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
+                    fpAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
+                    fpMult.removeSpeculatedInstrs(RSEntriesToClear, branchType)
                     #print("After")
                     #intAdder.printRS()
                     #WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
@@ -356,6 +379,8 @@ def main():
                     
                     #6. clear any executing speculated instructions from FUs - kill their exe in its tracks
                     intAdder.clearSpeculativeExe(RSEntriesToClear)
+                    fpAdder.clearSpeculativeExe(RSEntriesToClear)
+                    fpMult.clearSpeculativeExe(RSEntriesToClear)
                     #WILL NEED TO DO THIS FOR ALL OTHER UNITS ****************
                     
                     #7. fetch correct instructions
