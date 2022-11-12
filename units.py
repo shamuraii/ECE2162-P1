@@ -311,7 +311,7 @@ class IntAdder(unitWithRS):
         if self.currentExe == -1:
             return -1
             
-        print("entryToClear = ", entryToClear)
+        #print("entryToClear = ", entryToClear)
         
         #otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
         if self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
@@ -504,12 +504,209 @@ class FloatMult(unitWithRS):
             if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
                 self.executing[idx] = -1
 
+class LSQueueEntry():
+    def __init__(self):
+        self.LoadOrStore = None #holds type of the instruction
+        self.PC = None #holds PC of the instruction
+        self.sequence = None #holds sequence number (CYCLE) of instruction so we keep them in order
+        self.address = None #calculated memory address for storing or loading
+        self.dep1 = None #dependency for value being stored - Field1
+        self.dep2 = None #dependency for value used to calculate address - Field3
+        self.value1 = None #this holds the value for Fa in stores -> value to be stored
+        self.value2 = None #this holds the value for Ra in LD/SD, calculate value of address with -> offset(Ra)
+        self.offset = None #going to just make a variable for this for ease of access
+        self.result = None #value to store or value loaded from memory 
+        self.instruction = None #holding instruction here as well for checking branches
+        self.ROBEntry = None #using the ROB entry to resolve
+        
+    #method to populate the fields of an entry
+    def populateEntry(self, PC, dep1, dep2, value1, value2, instruction, cycle):
+        self.LoadOrStore = instruction.getType() #grab LD or SD
+        self.PC = PC 
+        self.sequence = cycle #sequence is just the order of entries, sort of redundant, but can identify by cycle numbers
+        #not updating address yet, that is calculated in EXE stage
+        self.dep1 = dep1 #possible dependency 1, only present for SD instructions
+        self.dep2 = dep2 #possible dependency 2, present for both LD and SD
+        self.value1 = value1 #this holds the value for Fa in stores -> value to be stored
+        self.value2 = value2 #this holds the value for Ra in LD/SD, calculate value of address with -> offset(Ra)
+        self.offset = instruction.getField2() #grab offset from instruction just for easier use
+        self.instruction = instruction
+        
+    #method to populate the address since it is not known when entry is first created/filled
+    def updateAddress(self, address):
+        self.address = address
+        
+    #method to update dependency 1
+    def updateDep1(self, dep1):
+        self.dep1 = dep1
+    
+    #method to update dependency 2
+    def updateDep2(self, dep2):
+        self.dep2 = dep2
+        
+    #method to populate the value since it may not be known when entry is first created/filled
+    def updateValue(self, value):
+        self.value = value
+        
+    #method to check if the entry is a load or store
+    def getLS(self):
+        return self.LoadOrStore
+    
+    #method to check the address within an entry
+    def getAddress(self):
+        return self.address
+        
+    #method to check value of within an entry
+    def getValue(self):
+        return self.value
+        
+    #method to return the address this entry corresponds to
+    def getInstruction(self):
+        return self.instruction
+        
+
+class LoadStoreQueue():
+    def __init__(self):
+        self.head = 0 #location of the top of the FIFO
+        self.tail = 0 #location of the end of the FIFO (next place to fill an entry, not occupied)
+        self.entries = [] #actual entries within the LSQ
+        for i in range(250): #please don't ever reach 250 entries
+            self.entries.append(LSQueueEntry())
+        
+    #method to add an entry to the queue
+    def addEntry(self, PC, dep1, dep2, value1, value2, instr, cycle):
+        # head=tail means empty or full, if head is a valid entry, then full
+        if self.isFull():
+            print("Load Store Queue is full, cannot insert the newest entry!")
+            
+        self.entries[self.tail].populateEntry(PC, dep1, dep2, value1, value2, instr, cycle)
+        self.tail = self.tail + 1 #increment tail value
+        
+    #method to pop an entry from the queue - ONLY DONE IN FIFO MANNER
+    def popEntry(self):
+        #check if empty first
+        if self.entries[self.head].getLS() == None:
+            print("Trying to pop the oldest entry in LS Queue but it is empty!")
+    
+        self.entries[self.head].clearEntry()
+        self.head = self.head + 1 #make next entry the head of the queue
+        
+    #method to check if an entry is in use
+    #def isInUse(self):
+        #loop through all entries starting from head
+        #for entry in self.entries
+        
+    #method to check if the queue is full - should never happen
+    def isFull(self):
+        return self.head == self.tail and self.entries[self.head].getLS() != None
+        
+    #method to return tail - next location for inserting an entry
+    def getTail(self):
+        return self.tail
+        
+    #method to return the entries list
+    def getEntries(self):
+        return self.entries
+
 class MemoryUnit(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
         self.rs_count = rs_count
         self.ex_cycles = ex_cycles
         self.mem_cycles = mem_cycles
         self.fu_count = fu_count
-        self.rs = []
-        for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())
+        self.queue = LoadStoreQueue()
+        self.memory = [None] * 64 #256 Bytes -> 64 Words
+            
+    #method to update memory value
+    def updateMemory(self, address, newValue):
+        #check if address is > 256 which is the limit
+        if address > 256:
+            print("Trying to update a memory value beyond the 256 Bytes! Value: ", address)
+        #address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
+        self.memory[address/4] = newValue
+        
+    #method to grab a requested memory value
+    def getMemory(self, address):
+        #check if address is > 256 which is the limit
+        if address > 256:
+            print("Trying to fetch a memory value beyond the 256 Bytes! Value: ", address)
+        #address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
+        return self.memory[address/4]    
+    
+    #method to check if any available entries in queue
+    def nextAvailableEntry(self):
+        #check if full, if yes, return -1
+        if self.queue.isFull():
+            return -1
+        #otherwise, return the next entry to insert an item
+        return self.queue.getTail()
+    
+    #method to add an entry to the queue
+    def addEntry(self, PC, dep1, dep2, value, instr, cycle):
+        self.queue.addEntry(PC, dep1, dep2, value, instr, cycle)
+        
+    #method to pop an entry from the queue - ONLY DONE IN FIFO MANNER
+    def popEntry(self):
+        self.queue.popEntry()
+        
+    #method to (try) and issue instructions
+    def issueInstruction(self, instr, cycle, RAT, fpARF, robAlias, ROB, PC):
+        #grab the next available entry in the LS Queue
+        nextEntry = self.nextAvailableEntry()
+        if nextEntry == -1:
+            raise Exception("Load/Store Queue attempting to issue with no available entries")
+        
+        #declare these variables outside the if statements then populate within
+        dep1 = None
+        dep2 = None
+        value1 = None
+        value2 = None
+        
+        #have different cases for handling dependencies between loads and stores
+        if instr.getType() == "LD":
+            #if load, looks like this: LD Fa, offset(Ra), where we are loading value at addr offset+Ra into Fa
+            #thus, depend upon Ra before we can perform the address computation
+            dep1 = None #this will correspond to the offset value - which is just a hard-coded value
+            dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
+            #now update the RAT with the new destination
+            RAT.update(instr.getField1(), robAlias)
+            dest = RAT.lookup(instr.getField1())
+            #check if we can resolve the dependency (dep2) right away in 2 ways - no need to solve dep1 as it isnt a dependency
+            #1. check if the dependency is just the original register name in the ARF
+            if dep2 == instr.getField3():
+                dep2 = "None"
+                value2 = fpARF.lookup(instr.getField3())
+            #2. check if value exists in ROB but hasn't been committed yet
+            if ROB.searchEntries(dep2) != None:
+                value2 = ROB.searchEntries(dep2)
+                dep2 = "None"
+        else:
+            #else, it is a store and looks like this: SD Fa, offset(Ra), storing value in Fa to addr offset+Ra
+            #thus, depend on both Fa and Ra
+            dep1 = RAT.lookup(instr.Field1()) #this dependency is for the value being stored - Fa
+            dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
+            #no need to update RAT for the store instruction, nothing is going to be written back
+            #check if we can resolve the dependencies right away in 2 ways
+            #1. check if the dependency is just the original register name in the ARF
+            if dep1 == instr.getField1():
+                dep1 = "None"
+                value1 = fpARF.lookup(instr.getField1())
+            if dep2 == instr.getField3():
+                dep2 = "None"
+                value2 = fpARF.lookup(instr.getField3())
+            #2. check if value exists in ROB but hasn't been committed yet
+            if ROB.searchEntries(dep1) != None:
+                value1 = ROB.searchEntries(dep1)
+                dep1 = "None"
+            if ROB.searchEntries(dep2) != None:
+                value2 = ROB.searchEntries(dep2)
+                dep2 = "None"
+                
+        #finally, add this instruction to the load/store queue
+        self.addEntry(PC, dep1, dep2, value1, value2, instr, cycle)
+
+        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+        print("FpMult RS ", str(nextEntry), " update: ", self.rs[nextEntry])
+    
+            
+    
