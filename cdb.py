@@ -37,12 +37,15 @@ class CommonDataBus:
 
     def newFpMult(self, station, value, cycle):
         if len(self.fpMultBuff) > self.buffSize:
-            raise Exception("CDB Buffer Filled (FpAdd)")
+            raise Exception("CDB Buffer Filled (FpMult)")
         else:
             self.fpMultBuff.append((station, value, cycle))
     
-    def newMem(self):
-        pass
+    def newMem(self, station, value, cycle):
+        if len(self.memBuff) > self.buffSize:
+            raise Exception("CDB Buffer Filled (Mem)")
+        else:
+            self.memBuff.append((station, value, cycle))
 
     def writeBack(self, cycle):
         # combine all the buffers
@@ -70,10 +73,12 @@ class CommonDataBus:
             self.intAdder.writebackVals(wbStation, wbValue)
             self.fpAdder.writebackVals(wbStation, wbValue)
             self.fpMult.writebackVals(wbStation, wbValue)
+            self.lsUnit.writebackVals(wbStation, wbValue)
             # Clear the RS from wherever it originated
             self.intAdder.writebackClear(wbStation)
             self.fpAdder.writebackClear(wbStation)
             self.fpMult.writebackClear(wbStation)
+            #not clearing the lsUnit's RS, as that is only done in the commit stage
             
             #update ROB entry, need special cases for branches and loads/stores since they're not "conventional" instrs
             if instr.getType() == "BNE" or instr.getType() == "BEQ":

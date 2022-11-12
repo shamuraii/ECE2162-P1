@@ -262,6 +262,10 @@ class ReservationStationEntry:
         self.instr = None #references the actual Instruction object this entry represents (For saving timing purposes only)
         self.done = 0 #signals that it already executed (could be waiting for CDB to writeback)
         self.branchEntry = None #branch that speculated the instruction this reservation station is holding
+        #adding these for the Load/Store queue
+        self.offset = None #going to just make a variable for this for ease of access
+        self.result = None #value to store or value loaded from memory 
+        self.ROBEntry = None #using the ROB entry to clear the queue entry when ready
     
     def __str__(self):
         return "\t".join(str(i) for i in [self.op, self.dest, self.value1, self.value2, self.dep1, self.dep2, self.addr])
@@ -290,7 +294,7 @@ class ReservationStationEntry:
     def fetchDep2(self):
         return self.dep2
 
-    #method returns True if dependencies exist or False if dependencies do not exist AND not already executed
+    #method returns True if dependencies do not exist AND not already executed, or False if dependencies do exist 
     def canExecute(self, currCycle):
         return self.op != "None" and self.fetchDep1() == "None" and self.fetchDep2() == "None" and currCycle > self.cycle and self.done == 0
             
@@ -320,6 +324,18 @@ class ReservationStationEntry:
                 
     def fetchBranchEntry(self):
         return self.branchEntry
+        
+    def fetchAddr(self):
+        return self.addr
+        
+    def fetchOffset(self):
+        return self.offset
+        
+    def fetchResult(self):
+        return self.result
+        
+    def fetchROBEntry(self):
+        return self.ROBEntry
     
     #creating update methods for each because we do not know what will be set initially
     #may have 1 value & 1 dep, 0 value & 2 dep, just an address, etc 
@@ -356,6 +372,15 @@ class ReservationStationEntry:
                 
     def updateBranchEntry(self, newBranchEntry):
         self.branchEntry = newBranchEntry
+        
+    def updateOffset(self, newOffset):
+        self.offset = newOffset
+        
+    def updateResult(self, newResult):
+        self.result = newResult
+        
+    def updateROBEntry(self, newEntry):
+        self.ROBEntry = newEntry
 
     def markDone(self):
         self.done = 1

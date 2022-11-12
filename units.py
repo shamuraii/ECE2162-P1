@@ -75,6 +75,14 @@ class unitWithRS:
         #self.rs[entry].updatePC(PC) #PC for this instruction
         self.rs[entry].updateBranchEntry(branchEntry)
         
+    #slight variation of populateRS for the LS Queue since a couple extra vars are needed
+    def populateLSQueue(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry, offset, ROBEntry):
+        #populate fields of chosen RS
+        self.populateRS(entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry)
+        #also update the offset, and ROB entry
+        self.rs[entry].updateOffset(offset)
+        self.rs[entry].updateROBEntry(ROBEntry)
+        
     def writebackVals(self, cdbStation, cdbValue):
         cdbDest = cdbStation.fetchDest()
         for entry in self.rs:
@@ -503,125 +511,33 @@ class FloatMult(unitWithRS):
             # check if the instr is a recently resolved mispredicted branch
             if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
                 self.executing[idx] = -1
-
-class LSQueueEntry():
-    def __init__(self):
-        self.LoadOrStore = None #holds type of the instruction
-        self.PC = None #holds PC of the instruction
-        self.sequence = None #holds sequence number (CYCLE) of instruction so we keep them in order
-        self.address = None #calculated memory address for storing or loading
-        self.dep1 = None #dependency for value being stored - Field1
-        self.dep2 = None #dependency for value used to calculate address - Field3
-        self.value1 = None #this holds the value for Fa in stores -> value to be stored
-        self.value2 = None #this holds the value for Ra in LD/SD, calculate value of address with -> offset(Ra)
-        self.offset = None #going to just make a variable for this for ease of access
-        self.result = None #value to store or value loaded from memory 
-        self.instruction = None #holding instruction here as well for checking branches
-        self.ROBEntry = None #using the ROB entry to resolve
-        
-    #method to populate the fields of an entry
-    def populateEntry(self, PC, dep1, dep2, value1, value2, instruction, cycle):
-        self.LoadOrStore = instruction.getType() #grab LD or SD
-        self.PC = PC 
-        self.sequence = cycle #sequence is just the order of entries, sort of redundant, but can identify by cycle numbers
-        #not updating address yet, that is calculated in EXE stage
-        self.dep1 = dep1 #possible dependency 1, only present for SD instructions
-        self.dep2 = dep2 #possible dependency 2, present for both LD and SD
-        self.value1 = value1 #this holds the value for Fa in stores -> value to be stored
-        self.value2 = value2 #this holds the value for Ra in LD/SD, calculate value of address with -> offset(Ra)
-        self.offset = instruction.getField2() #grab offset from instruction just for easier use
-        self.instruction = instruction
-        
-    #method to populate the address since it is not known when entry is first created/filled
-    def updateAddress(self, address):
-        self.address = address
-        
-    #method to update dependency 1
-    def updateDep1(self, dep1):
-        self.dep1 = dep1
-    
-    #method to update dependency 2
-    def updateDep2(self, dep2):
-        self.dep2 = dep2
-        
-    #method to populate the value since it may not be known when entry is first created/filled
-    def updateValue(self, value):
-        self.value = value
-        
-    #method to check if the entry is a load or store
-    def getLS(self):
-        return self.LoadOrStore
-    
-    #method to check the address within an entry
-    def getAddress(self):
-        return self.address
-        
-    #method to check value of within an entry
-    def getValue(self):
-        return self.value
-        
-    #method to return the address this entry corresponds to
-    def getInstruction(self):
-        return self.instruction
-        
-
-class LoadStoreQueue():
-    def __init__(self):
-        self.head = 0 #location of the top of the FIFO
-        self.tail = 0 #location of the end of the FIFO (next place to fill an entry, not occupied)
-        self.entries = [] #actual entries within the LSQ
-        for i in range(250): #please don't ever reach 250 entries
-            self.entries.append(LSQueueEntry())
-        
-    #method to add an entry to the queue
-    def addEntry(self, PC, dep1, dep2, value1, value2, instr, cycle):
-        # head=tail means empty or full, if head is a valid entry, then full
-        if self.isFull():
-            print("Load Store Queue is full, cannot insert the newest entry!")
-            
-        self.entries[self.tail].populateEntry(PC, dep1, dep2, value1, value2, instr, cycle)
-        self.tail = self.tail + 1 #increment tail value
-        
-    #method to pop an entry from the queue - ONLY DONE IN FIFO MANNER
-    def popEntry(self):
-        #check if empty first
-        if self.entries[self.head].getLS() == None:
-            print("Trying to pop the oldest entry in LS Queue but it is empty!")
-    
-        self.entries[self.head].clearEntry()
-        self.head = self.head + 1 #make next entry the head of the queue
-        
-    #method to check if an entry is in use
-    #def isInUse(self):
-        #loop through all entries starting from head
-        #for entry in self.entries
-        
-    #method to check if the queue is full - should never happen
-    def isFull(self):
-        return self.head == self.tail and self.entries[self.head].getLS() != None
-        
-    #method to return tail - next location for inserting an entry
-    def getTail(self):
-        return self.tail
-        
-    #method to return the entries list
-    def getEntries(self):
-        return self.entries
+                
 
 class MemoryUnit(unitWithRS):
     def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
-        self.rs_count = rs_count
+        self.rs_count = rs_count 
         self.ex_cycles = ex_cycles
         self.mem_cycles = mem_cycles
         self.fu_count = fu_count
-        self.queue = LoadStoreQueue()
+        self.currentExe = -1 #-1 if nothing being executed or value of queue entry if something is in progress
+        self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
         self.memory = [None] * 64 #256 Bytes -> 64 Words
+        self.rs = [] #called rs to make use of the inheritance, but it is actually a FIFO queue
+        self.head = 0 #location of the top of the FIFO
+        self.tail = 0 #location of the end of the FIFO (next place to fill an entry, not occupied)
+        self.currentExe = -1 #-1 if nothing being executed or queue entry if something is in progress
+        self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
+        for _ in range(rs_count):
+            self.rs.append(ReservationStationEntry())
             
     #method to update memory value
     def updateMemory(self, address, newValue):
         #check if address is > 256 which is the limit
         if address > 256:
             print("Trying to update a memory value beyond the 256 Bytes! Value: ", address)
+        #also check if memory address is not cleanly divisible by 4, which will cause problems
+        if address % 4 != 0:
+            print("The address ", address, " is not cleanly divisible by 4! Incorrect memory may be fetched!")
         #address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
         self.memory[address/4] = newValue
         
@@ -630,24 +546,32 @@ class MemoryUnit(unitWithRS):
         #check if address is > 256 which is the limit
         if address > 256:
             print("Trying to fetch a memory value beyond the 256 Bytes! Value: ", address)
+        #also check if memory address is not cleanly divisible by 4, which will cause problems
+        if address % 4 != 0:
+            print("The address ", address, " is not cleanly divisible by 4! Incorrect memory may be fetched!")
         #address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
         return self.memory[address/4]    
     
     #method to check if any available entries in queue
     def nextAvailableEntry(self):
         #check if full, if yes, return -1
-        if self.queue.isFull():
+        if self.rs.isFull():
             return -1
         #otherwise, return the next entry to insert an item
-        return self.queue.getTail()
+        return self.tail
     
     #method to add an entry to the queue
-    def addEntry(self, PC, dep1, dep2, value, instr, cycle):
-        self.queue.addEntry(PC, dep1, dep2, value, instr, cycle)
+    #def addEntry(self, PC, dep1, dep2, value1, value2, instr, cycle):
+        #self.queue.addEntry(PC, dep1, dep2, value1, value2, instr, cycle)
         
     #method to pop an entry from the queue - ONLY DONE IN FIFO MANNER
     def popEntry(self):
-        self.queue.popEntry()
+        self.rs.popEntry()
+        
+    #method returns True if the value for Ra is known and we are not dependent/waiting on a value, also if other conds are met
+    def canExecuteLDSD(self, currCycle):
+        return self.op != "None" and self.fetchDep2() == "None" and currCycle > self.cycle and self.done == 0    
+        
         
     #method to (try) and issue instructions
     def issueInstruction(self, instr, cycle, RAT, fpARF, robAlias, ROB, PC):
@@ -666,7 +590,7 @@ class MemoryUnit(unitWithRS):
         if instr.getType() == "LD":
             #if load, looks like this: LD Fa, offset(Ra), where we are loading value at addr offset+Ra into Fa
             #thus, depend upon Ra before we can perform the address computation
-            dep1 = None #this will correspond to the offset value - which is just a hard-coded value
+            dep1 = None #this isn't used for LD
             dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
             #now update the RAT with the new destination
             RAT.update(instr.getField1(), robAlias)
@@ -703,10 +627,120 @@ class MemoryUnit(unitWithRS):
                 dep2 = "None"
                 
         #finally, add this instruction to the load/store queue
-        self.addEntry(PC, dep1, dep2, value1, value2, instr, cycle)
+        self.populateLSQueue(tail, instr.getType(), None, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry(), instr.getField2(), robAlias)
+        #increment tail 
+        self.tail = self.tail + 1
 
-        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
-        print("FpMult RS ", str(nextEntry), " update: ", self.rs[nextEntry])
+    #method to fetch next ready instr for execution
+    #NOTE: I think the addresses may be calculated out of order, but the actual fetching/storing of memory must be carefully ordered
+    def fetchNext(self, cycle):
+        #check if an instruction is already in flight - since no pipelining return if one is in progress
+        if self.currentExe != -1:
+            return
+        #look through the queue to find an entry without any dependencies, and both values ready
+        #look from head of queue to tail of queue to traverse the list in order of issue
+        for index in range(head,tail):
+            #grab the entry for this index
+            entry = self.rs[index]
+            
+            #if the instruction has no dependencies, send it off to calculate the address in the exe stage
+            if entry.canExecuteLDSD(cycle):
+                #if no deps, execute this one
+                print("Executing instr: ", entry.fetchInstr(), " from Queue index ", self.rs.index(entry), " | ", entry)
+                self.currentExe = self.rs.index(entry)
+                self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
+                entry.fetchInstr().setExStart(cycle)
+                break
+
+
+    #method to execute the next instr in the queue (if ready)
+    def exeInstr(self, cycle, CDB):
+        #first check if an instr is actually in flight, if not, just jump out
+        if self.currentExe == -1:
+            return 
     
+        #increment the count of cycles in exe stage
+        self.cyclesInProgress = self.cyclesInProgress + 1
+        #make sure the cycles executed thus far is still < the # it takes
+        if self.cyclesInProgress < self.ex_cycles:
+            #return, still need to exe for more cycles
+            return 
+        
+        #else, the cycles in exe have completed, compute the actual result, which is the address to LD or SD from
+        address = self.rs[self.currentExe].fetchOffset() + self.rs[self.currentExe].fetchValue2()    
+        #place this resulting address within the queue entry
+        self.rs[self.currentExe].updateAddr(address)
+        
+        #address now known, if it is a load, check if any stores that come before are pointing towards the same memory address and have their value ready
+        if self.rs[self.currentExe].fetchOp() == "LD":
+            #must check the list from this LD location up to the head
+            for index in range(self.currentExe, head-1, -1): #subtracting 1 from head to ensure proper bounds
+                #do not care if we see any other loads along the way, not doing load-to-load-forwarding
+                #check if this index is a store and if the address matches this one
+                if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == address:
+                    #if yes, perform forwarding-from-a-store and grab the value now instead of fetching from memory
+                    self.rs[self.currentExe].updateResult(self.rs[index].fetchResult())
+                    #mark the RS as done as well and queue up in CDB buffer for writeback
+                    self.rs[self.currentExe].markDone()
+                    #send to CDB buffer
+                    CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
+                    #since forwarding, need to update the MEM cycles as well
+                    print("Performing forwarding-from-a-store from queue index ", index, " to ", self.currentExe, ", will take from cycles ", cycle, "-", cycle+1)
+                    self.rs[self.currentExe].fetchInstr().setMemStart(cycle)
+                    self.rs[self.currentExe].fetchInstr().setMemEnd(cycle+1)
+                    #NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
+                    break                   
+        elif self.rs[self.currentExe].fetchOp() == "SD":
+            #before anything extra, if this instruction is a store, check if the value being stored is ready, if not, we can't do forwarding no matter what so skip this part
+            if self.rs[self.currentExe].fetchDep1() == "None":
+                #if it is a store and the val is ready, check if any loads that come after it are pointing towards the same memory address, but if another store is seen, check its memory address
+                    #if the address of the load matches this store's, then forward the data
+                    #if the address of the store unknown, return without doing anything
+                    #if the address of the store the same as this stores, then return without doing anything
+                    #if the address of the store different than this store, continue looking down the list
+                #must check the list from this SD location down to the tail
+                for index in range(self.currentExe, tail):
+                    #first checking if it is a load and if the address matches, which is the easier case
+                    if self.rs[index].fetchOp() == "LD" and self.rs[index].fetchAddr() == address:
+                        #if it is a match, perform forwarding-from-a-store and send the value now instead of fetching from memory
+                        self.rs[index].updateResult(self.rs[self.currentExe].fetchResult())
+                        #mark the RS as done as well and queue up in CDB buffer for writeback
+                        self.rs[index].markDone()
+                        #send to CDB buffer
+                        CDB.newIntAdd(self.rs[index], result, cycle)
+                        #since forwarding, need to update the MEM cycles as well
+                        print("Performing forwarding-from-a-store from queue index ", index, " to ", self.currentExe, ", will take from cycles ", cycle, "-", cycle+1)
+                        self.rs[index].fetchInstr().setMemStart(cycle)
+                        self.rs[index].fetchInstr().setMemEnd(cycle+1)
+                        #NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
+                        break                   
+                
+        else:
+            raise Exception("Trying to execute a ", self.rs[self.currentExe].fetchOp(), " instruction within the MemoryUnit!")
+        
+        #print result for fun
+        print("Address calculation for ", self.rs[self.currentExe].fetchInstr(), " is ", str(address))
+        
+        #just mark the end of the exe cycle for this instruction, nothing to do for bcast on CDB and instruction is not actually finished
+        #LD will finish in MEM stage, then can WB
+        #SD will skip MEM and finish in COMMIT stage, doesn't mess with WB
+        self.rs[self.currentExe].fetchInstr().setExEnd(cycle)
+        #self.rs[self.currentExe].markDone()
+        self.currentExe = -1
+        self.cyclesInProgress = 0
+        
+        return 
+    
+    #now things get a little tricky
+    #method to find the next LD or SD to execute
+    #need to traverse list head to tail
+        #make a flag for if we see a store or not
+            #if store seen, mark it true
+            #if this store just seen IS NOT READY to execute, but address IS KNOWN, check the following instructions
+                #if a store comes after it, and IS READY to execute, go ahead and start up this entry in the queue
+                #if a load comes after it, no matter what, just return without sending an instruction to memory
+            #if this store just seen IS NOT READY to execute, but address IS NOT KNOWN, return without sending an instruction to memory
+    #need to check for Forwarding-from-a-Store again
+        #can perform a forward from store even if there is a LD or SD in progress
             
     
