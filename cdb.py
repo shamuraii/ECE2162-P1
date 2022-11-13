@@ -84,6 +84,9 @@ class CommonDataBus:
             if instr.getType() == "BNE" or instr.getType() == "BEQ":
                 #don't actually need to WB a branch
                 self.ROB.writebackROBBranch(instr, cycle)
+            elif instr.getType() == "SD":
+                #not writing back with a store, just need to mark the ROB entry as done, which is done elsewhere
+                pass
             else:
                 self.ROB.writebackROB(wbDest, wbValue, cycle)
 

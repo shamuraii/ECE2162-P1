@@ -558,9 +558,9 @@ class MemoryUnit(unitWithRS):
 
 	#method to print the memory values
 	def printMemory(self):
-		for value in self.memory:
-			if value != None:
-				print("MEM[", self.memory.index(value), "] = ", value)
+		for index in range(64):
+			if self.memory[index] != None:
+				print("MEM[", index, "] = ", self.memory[index])
 
 	#method to check if any available entries in queue
 	def nextAvailableEntry(self):
@@ -615,6 +615,7 @@ class MemoryUnit(unitWithRS):
 			#thus, depend on both Fa and Ra
 			dep1 = RAT.lookup(instr.getField1()) #this dependency is for the value being stored - Fa
 			dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
+			dest = robAlias 
 			#no need to update RAT for the store instruction, nothing is going to be written back
 			#check if we can resolve the dependencies right away in 2 ways
 			#1. check if the dependency is just the original register name in the ARF
@@ -700,6 +701,8 @@ class MemoryUnit(unitWithRS):
 		for index in range(self.head, self.tail):
 			#print("looking at ", self.rs[index], " LDorSDReady = ", self.rs[index].LDorSDReady(cycle))
 			#check if this instruction has no remaining dependencies and is "ready" to be processed, and ensure it has not already been done
+			print("self.rs[index] = ", self.rs[index])
+			print("self.rs[index].fetchLDorSDDone() = ", self.rs[index].fetchLDorSDDone())
 			if self.rs[index].LDorSDReady(cycle) == True and self.rs[index].fetchLDorSDDone() == None: 
 				#if so, no dependencies exist, but check if the address has been computed
 				if self.rs[index].fetchAddr() != None:
@@ -761,11 +764,11 @@ class MemoryUnit(unitWithRS):
 				for index in range(self.currentLDorSD, self.head-1, -1): #subtracting 1 from head to ensure proper bounds
 					#do not care if we see any other loads along the way, not doing load-to-load-forwarding
 					#check if this index is a store and if the address matches this one
-					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == address:
+					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == self.rs[self.currentLDorSD].fetchAddr():
 						#if yes, perform forwarding-from-a-store and grab the value now instead of fetching from memory
-						self.rs[self.currentLDorSD].updateResult(self.rs[index].fetchResult())
+						self.rs[self.currentLDorSD].updateValue1(self.rs[index].fetchValue1())
 						#send to CDB buffer
-						CDB.newMem(self.rs[self.currentLDorSD], self.rs[self.currentLDorSD].fetchResult(), cycle)
+						CDB.newMem(self.rs[self.currentLDorSD], self.rs[self.currentLDorSD].fetchValue1(), cycle)
 						#mark the RS as done as well 
 						self.rs[self.currentLDorSD].markDone()
 						self.rs[self.currentLDorSD].markLDorSDDone()
@@ -774,8 +777,8 @@ class MemoryUnit(unitWithRS):
 						#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
 						self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle+1)
 						#NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
-						break   
-			else:
+						return   
+			elif self.rs[self.currentLDorSD].fetchOp() == "SD":
 				raise Exception("TRYING TO EXECUTE A SD IN THE EXECUTE LD METHOD!")
 
 		#increment the count of cycles in exe stage
@@ -801,7 +804,7 @@ class MemoryUnit(unitWithRS):
 		return 
 		
 	#method to execute store instructions
-	def executeSD(self, cycle):
+	def executeSD(self, cycle, CDB, ROB):
 		#first check if an instr is actually in flight, if not, just jump out
 		if self.currentLDorSD == -1:
 			return 
@@ -809,7 +812,12 @@ class MemoryUnit(unitWithRS):
 		#if a store is in progress, jump out
 		if self.rs[self.currentLDorSD].fetchOp() == "LD":
 			return
+			
+		#if we are attempting to start on the same cycle the addr was calculated, wait another
+		if self.rs[self.currentLDorSD].fetchInstr().getExEndCycle() >= cycle:
+			return
 
+		#if starting the store, set the com start cycle
 		if self.MemCyclesInProgress == 0:
 			self.rs[self.currentLDorSD].fetchInstr().setComStart(cycle)
 		
@@ -823,12 +831,13 @@ class MemoryUnit(unitWithRS):
 			return 
 				
 		#else, the cycles in exe have completed, go ahead and load the data from memory
-		loadResult = self.getMemory(self.rs[self.currentExe].fetchAddr())		
+		self.updateMemory(self.rs[self.currentLDorSD].fetchAddr(), self.rs[self.currentLDorSD].fetchValue1())		
 		
-		print("Stored value: MEM[", self.rs[self.currentExe].fetchAddr(), "] = ", str(self.rs[self.currentLDorSD].fetchResult()))
+		print("Stored value: MEM[", self.rs[self.currentLDorSD].fetchAddr(), "] = ", str(self.rs[self.currentLDorSD].fetchValue1()))
 		
 		#mark RS done and update timing info
-		#CDB.newMem(self.rs[self.currentLDorSD], loadResult, cycle)
+		#CDB.newMem(self.rs[self.currentLDorSD], self.rs[self.currentLDorSD].fetchValue1(), cycle)
+		ROB.completeStore(self.rs[self.currentLDorSD].fetchROBEntry(), cycle)
 		self.rs[self.currentLDorSD].fetchInstr().setComEnd(cycle)
 		self.rs[self.currentLDorSD].markLDorSDDone()
 		#self.rs[self.currentLDorSD].markDone()

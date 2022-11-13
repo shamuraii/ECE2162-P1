@@ -130,7 +130,7 @@ class Instruction:
 		self.exCycle = ("X", "X") # (start,end) tuple
 		self.memCycle = ("X", "X") # (start,end) tuple
 		self.wbCycle = "X"
-		self.comCycle = "X"
+		self.comCycle = ("X", "X") #need start and end for stores 
 		self.PC = PC #adding the PC of an instr for ease of resolving/committing branches later
 		self.branchEntry = None #using this for when the instr will need to be cleared from RS if branch is mispredicted
 
@@ -142,7 +142,8 @@ class Instruction:
 		outInstr.setMemStart(self.memCycle[0])
 		outInstr.setMemEnd(self.memCycle[1])
 		outInstr.setWbCycle(self.wbCycle)
-		outInstr.setComCycle(self.comCycle)
+		outInstr.setComStart(self.comCycle[0])
+		outInstr.setComEnd(self.comCycle[1])
 		outInstr.setBranchEntry(self.branchEntry)
 		return outInstr
 	 
@@ -194,8 +195,15 @@ class Instruction:
 	def setWbCycle(self, val):
 		self.wbCycle = val
 
-	def setComCycle(self, val):
-		self.comCycle = val
+	def setComStart(self, val):
+		temp = list(self.comCycle)
+		temp[0] = val
+		self.comCycle = tuple(temp)
+		
+	def setComEnd(self, val):
+		temp = list(self.comCycle)
+		temp[1] = val
+		self.comCycle = tuple(temp)
 		
 	def setBranchEntry(self, val):
 		self.branchEntry = val
@@ -210,7 +218,7 @@ class Instruction:
 			return self.type
 
 	def longStr(self):
-		return "\t".join([str(self), str(self.isCycle), str(self.exCycle[0]) + "-" + str(self.exCycle[1]), str(self.memCycle[0]) + "-" + str(self.memCycle[1]), str(self.wbCycle), str(self.comCycle)])
+		return "\t".join([str(self), str(self.isCycle), str(self.exCycle[0]) + "-" + str(self.exCycle[1]), str(self.memCycle[0]) + "-" + str(self.memCycle[1]), str(self.wbCycle), str(self.comCycle[0]) + "-" + str(self.comCycle[1])])
 
 class InstructionBuffer:
 	def __init__(self, length) -> None:
@@ -418,6 +426,13 @@ class ROBEntry:
 		self.value = newValue
 		self.done = 1
 		self.doneCycle = cycle
+		
+	def updateStoreValue(self, cycle):
+		if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join([self.op, self.dest, self.value]))
+		# Update value and mark as done
+		#self.value = newValue
+		self.done = 1
+		self.doneCycle = cycle
 
 	def updateInstr(self, newInstr):
 		self.instr = newInstr
@@ -570,6 +585,15 @@ class ReorderBuffer:
 				if entry.getInstr().getPC() == PC:
 					#this is the instruction that mispredicted, clear all that follow it
 					deleteFollowing = True
-			
+					
+	#method to make a store ready for completion
+	def completeStore(self, robAlias, cycle):
+		#search through entire ROB
+		for entry in self.entries:
+			#make sure entry exists
+			if entry != None:
+				#check if the ROB entry we need is there 
+				if entry.getRobDest() == robAlias:
+					entry.updateStoreValue(cycle)
 
 

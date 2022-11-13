@@ -323,7 +323,7 @@ def main():
 		#also look to start a load or store within the MEM or COM stage
 		lsUnit.startLDorSD(cycle, ROB)
 		lsUnit.executeLD(cycle, CDB)
-		lsUnit.executeSD(cycle)
+		lsUnit.executeSD(cycle, CDB, ROB)
 
 		#now check if results has -1s in it or not, tuple goes: (result of calculation, PC of instruction)
 		if results[0] != -1 and results[1] != -1:
@@ -428,17 +428,22 @@ def main():
 		#allow cdb to writeback
 		CDB.writeBack(cycle)
 
-		#allow rob to commit
-		if ROB.canCommit(cycle) and lsUnit.isSDInProgress() == False:
+		#grabbing these two here to check if a store instr can be committed, think the WB stage throws off timing otherwise by 1 cycle
+		entry = ROB.getOldestEntry()
+		comInstr = entry.getInstr()
+		#allow rob to commit if the top entry is able and a store is not in progress halting the commit stage, or if the entry is a store and is just finishing
+		if (ROB.canCommit(cycle) and lsUnit.isSDInProgress() == False) or (entry.getOp() == "SD" and entry.getDone() == 1):
 			entry = ROB.getOldestEntry()
 			comInstr = entry.getInstr()
 			print("ROB Commit: ", comInstr)
 
-			#update commit cycle
-			comInstr.setComCycle(cycle)
+			if entry.getOp() != "SD":
+				#update commit cycle
+				comInstr.setComStart(cycle)
+				comInstr.setComEnd(cycle)
 			
 			#don't update ARF and RAT for branches
-			if comInstr.getType() != "BNE" and comInstr.getType() != "BEQ":
+			if comInstr.getType() != "BNE" and comInstr.getType() != "BEQ" and comInstr.getType() != "SD":
 				# Update ARF
 				if 'R' in entry.getDest():
 					intARF.update(entry.getDest(), entry.getValue())
