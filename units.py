@@ -1,746 +1,845 @@
 from architecture import Instruction, RegisterAliasTable, ReservationStationEntry, ReorderBuffer
 
 class IntegerARF:
-    registers = {}
-    def __init__(self) -> None:
-        #effectively add 32 registers
-        for i in range(32):
-            self.registers['R'+str(i)] = 0
-            
-    def update(self, register, value):
-        #first check for valid register
-        if register != "R0" and register in self.registers:
-            #update the register value
-            self.registers[register] = value
-        elif register == "R0":
-            print("CANNOT UPDATE R0 - HARDWIRED TO 0")
-        else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
-            
-    #method to lookup value corresponding to a register
-    def lookup(self, register):
-        if register in self.registers:
-            return self.registers[register]
-            
-    def __str__(self):
-        #stringify all registers and their values
-        return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
-            
+	registers = {}
+	def __init__(self) -> None:
+		#effectively add 32 registers
+		for i in range(32):
+			self.registers['R'+str(i)] = 0
+			
+	def update(self, register, value):
+		#first check for valid register
+		if register != "R0" and register in self.registers:
+			#update the register value
+			self.registers[register] = value
+		elif register == "R0":
+			print("CANNOT UPDATE R0 - HARDWIRED TO 0")
+		else:
+			print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
+			
+	#method to lookup value corresponding to a register
+	def lookup(self, register):
+		if register in self.registers:
+			return self.registers[register]
+			
+	def __str__(self):
+		#stringify all registers and their values
+		return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
+			
 class FloatARF:
-    registers = {}
-    def __init__(self) -> None:
-        #effectively add 32 registers
-        for i in range(32):
-            self.registers['F'+str(i)] = 0.0
-            
-    def update(self, register, value):
-        #first check for valid register
-        if register in self.registers:
-            #update the register value
-            self.registers[register] = value
-        else:
-            print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
-            
-    #method to lookup value corresponding to a register
-    def lookup(self, register):
-        if register in self.registers:
-            return self.registers[register]
-            
-    def __str__(self):
-        #stringify all registers and their values
-        return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
+	registers = {}
+	def __init__(self) -> None:
+		#effectively add 32 registers
+		for i in range(32):
+			self.registers['F'+str(i)] = 0.0
+			
+	def update(self, register, value):
+		#first check for valid register
+		if register in self.registers:
+			#update the register value
+			self.registers[register] = value
+		else:
+			print("REGISTER " + register + " INVALID - CANNOT UPDATE ARF")
+			
+	#method to lookup value corresponding to a register
+	def lookup(self, register):
+		if register in self.registers:
+			return self.registers[register]
+			
+	def __str__(self):
+		#stringify all registers and their values
+		return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
 
 #creating a class for all FUs to inherit from, contains all RS-relevant methods
 class unitWithRS:
-    #method to check if any available RS's
-    def availableRS(self):
-        #loop through all RS's
-        for entry in self.rs:
-            if entry.checkBusy() == 0:
-                return self.rs.index(entry) #return first available index in RS
-        return -1 #else all RS are found to be busy, return -1 for no RS available
- 
-    #method to populate the entry of the RS passed in
-    def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry):
-        #populate fields of chosen RS
-        self.rs[entry].updateBusy(1) #mark this RS as now being populated/busy doing computation
-        self.rs[entry].updateOp(op) #will hold instruction in use
-        self.rs[entry].updateDest(dest)
-        self.rs[entry].updateValue1(value1) #will either be a reg. value or placeholder until dep is resolved
-        self.rs[entry].updateValue2(value2) #same as line above
-        self.rs[entry].updateDep1(dep1) #will be empty or an ROB entry
-        self.rs[entry].updateDep2(dep2) #empty or an ROB entry
-        self.rs[entry].updateCycle(cycle) #cycle this RS was issued on
-        self.rs[entry].updateInstr(instr)
-        #self.rs[entry].updatePC(PC) #PC for this instruction
-        self.rs[entry].updateBranchEntry(branchEntry)
-        
-    #slight variation of populateRS for the LS Queue since a couple extra vars are needed
-    def populateLSQueue(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry, offset, ROBEntry):
-        #populate fields of chosen RS
-        self.populateRS(entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry)
-        #also update the offset, and ROB entry
-        self.rs[entry].updateOffset(offset)
-        self.rs[entry].updateROBEntry(ROBEntry)
-        
-    def writebackVals(self, cdbStation, cdbValue):
-        cdbDest = cdbStation.fetchDest()
-        for entry in self.rs:
-            if entry.checkBusy() == 1:
-                #check dep 1 for match
-                if entry.fetchDep1() == cdbDest:
-                    entry.updateValue1(cdbValue)
-                    entry.updateDep1("None")
-                #check dep 2 for match
-                if entry.fetchDep2() == cdbDest:
-                    entry.updateValue2(cdbValue) 
-                    entry.updateDep2("None")  
+	#method to check if any available RS's
+	def availableRS(self):
+		#loop through all RS's
+		for entry in self.rs:
+			if entry.checkBusy() == 0:
+				return self.rs.index(entry) #return first available index in RS
+		return -1 #else all RS are found to be busy, return -1 for no RS available
 
-    def writebackClear(self, cdbStation):
-        #clear entry if its the one being WrittenBack
-        for entry in self.rs:
-            if entry is cdbStation:
-                entry.clearEntry()
+	#method to populate the entry of the RS passed in
+	def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry):
+		#populate fields of chosen RS
+		self.rs[entry].updateBusy(1) #mark this RS as now being populated/busy doing computation
+		self.rs[entry].updateOp(op) #will hold instruction in use
+		self.rs[entry].updateDest(dest)
+		self.rs[entry].updateValue1(value1) #will either be a reg. value or placeholder until dep is resolved
+		self.rs[entry].updateValue2(value2) #same as line above
+		self.rs[entry].updateDep1(dep1) #will be empty or an ROB entry
+		self.rs[entry].updateDep2(dep2) #empty or an ROB entry
+		self.rs[entry].updateCycle(cycle) #cycle this RS was issued on
+		self.rs[entry].updateInstr(instr)
+		#self.rs[entry].updatePC(PC) #PC for this instruction
+		self.rs[entry].updateBranchEntry(branchEntry)
+		
+	#slight variation of populateRS for the LS Queue since a couple extra vars are needed
+	def populateLSQueue(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry, offset, ROBEntry):
+		#populate fields of chosen RS
+		self.populateRS(entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry)
+		#also update the offset, and ROB entry
+		self.rs[entry].updateOffset(offset)
+		self.rs[entry].updateROBEntry(ROBEntry)
+		
+	def writebackVals(self, cdbStation, cdbValue):
+		cdbDest = cdbStation.fetchDest()
+		for entry in self.rs:
+			if entry.checkBusy() == 1:
+				#check dep 1 for match
+				if entry.fetchDep1() == cdbDest:
+					entry.updateValue1(cdbValue)
+					entry.updateDep1("None")
+				#check dep 2 for match
+				if entry.fetchDep2() == cdbDest:
+					entry.updateValue2(cdbValue) 
+					entry.updateDep2("None")  
 
-    #method to check each RS for the requested dependency, returns entry if there is a dependency, or -1 if there is not
-    def checkDependencies(self, depCheck):
-        #loop through all RS's
-        for entry in self.rs:
-            #now fetch the dependencies and compare against each
-            if entry.fetchDep1() == depCheck:
-                return self.rs.index(entry) #return number of entry
-            if entry.fetchDep2() == depCheck:
-                return self.rs.index(entry) #return number of entry
-        #else no dependencies within RS list, return -1
-        return -1
-    
-    #method to resolve dependencies, probably a better way to do this
-    def resolveDep(self, entry, value, dep):
-        #first find if it is dependency 1 or 2
-        if self.rs[entry].fetchDep1() == dep: #check dep 1 to see if it matches
-            self.rs[entry].updateValue1(value) #update to resolved value
-            self.rs[entry].updateDep1("None") #clear dependency
-        if self.rs[entry].fetchDep2() == dep: #check dep 2 as well to see if it matches
-            self.rs[entry].updateValue2(value) #update to resolved value
-            self.rs[entry].updateDep2("None") #clear dependency   
-        
-    #method to grab fields 1 and 2 for computation
-    #def fetchArgs(self, entry):
-        #return [self.rs[entry].fetchValue1, self.rs[entry].fetchValue2]
-        
-    #method to clear a RS once it completes
-    def clearRS(self, entry):
-        self.rs[entry].clearEntry()
-        
-    #method to check if all RS empty
-    def isRSEmpty(self):
-        #loop through all RS's
-        for entry in self.rs:
-            if entry.fetchOp() != "None":
-                return False #return false as in all entries are NOT empty
-        return True #return true if all empty entries 
+	def writebackClear(self, cdbStation):
+		#clear entry if its the one being WrittenBack
+		for entry in self.rs:
+			if entry is cdbStation:
+				entry.clearEntry()
 
-    #method to clear RS occupied by mispredicted branch instructions
-    def removeSpeculatedInstrs(self, wrongBranches, branchType):
-        #loop through entire RS for each deleted branch looking for matches
-        #looping through incorrect branches
-        for branch in wrongBranches:
-            #looping through RS
-            for RS in self.rs:
-                #not sure if an exception will be thrown for comparing None entries so check that first to short-circuit
-                #using last RS.fetchInstr().getType() != branchType check to not accidentally clear out the branch we're executing
-                if RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
-                    #if this entry is one that should be cleared, do it
-                    self.clearRS(self.rs.index(RS))
-                    
-                    
+	#method to check each RS for the requested dependency, returns entry if there is a dependency, or -1 if there is not
+	def checkDependencies(self, depCheck):
+		#loop through all RS's
+		for entry in self.rs:
+			#now fetch the dependencies and compare against each
+			if entry.fetchDep1() == depCheck:
+				return self.rs.index(entry) #return number of entry
+			if entry.fetchDep2() == depCheck:
+				return self.rs.index(entry) #return number of entry
+		#else no dependencies within RS list, return -1
+		return -1
 
-    def printRS(self):
-        for station in self.rs: print(station)
+	#method to resolve dependencies, probably a better way to do this
+	def resolveDep(self, entry, value, dep):
+		#first find if it is dependency 1 or 2
+		if self.rs[entry].fetchDep1() == dep: #check dep 1 to see if it matches
+			self.rs[entry].updateValue1(value) #update to resolved value
+			self.rs[entry].updateDep1("None") #clear dependency
+		if self.rs[entry].fetchDep2() == dep: #check dep 2 as well to see if it matches
+			self.rs[entry].updateValue2(value) #update to resolved value
+			self.rs[entry].updateDep2("None") #clear dependency   
+		
+	#method to grab fields 1 and 2 for computation
+	#def fetchArgs(self, entry):
+		#return [self.rs[entry].fetchValue1, self.rs[entry].fetchValue2]
+		
+	#method to clear a RS once it completes
+	def clearRS(self, entry):
+		self.rs[entry].clearEntry()
+		
+	#method to check if all RS empty
+	def isRSEmpty(self):
+		#loop through all RS's
+		for entry in self.rs:
+			if entry.fetchOp() != "None":
+				return False #return false as in all entries are NOT empty
+		return True #return true if all empty entries 
+
+	#method to clear RS occupied by mispredicted branch instructions
+	def removeSpeculatedInstrs(self, wrongBranches, branchType):
+		#loop through entire RS for each deleted branch looking for matches
+		#looping through incorrect branches
+		for branch in wrongBranches:
+			#looping through RS
+			for RS in self.rs:
+				#not sure if an exception will be thrown for comparing None entries so check that first to short-circuit
+				#using last RS.fetchInstr().getType() != branchType check to not accidentally clear out the branch we're executing
+				if RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
+					#if this entry is one that should be cleared, do it
+					self.clearRS(self.rs.index(RS))
+					
+					
+
+	def printRS(self):
+		for station in self.rs: print(station)
 
 #integer adder is unpipelined - only 1 instr at a time start to finish
 class IntAdder(unitWithRS):
-    def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
-        self.rs_count = rs_count
-        self.ex_cycles = ex_cycles
-        self.fu_count = fu_count
-        self.rs = []
-        self.currentExe = -1 #-1 if nothing being executed or RS entry if something is in progress
-        self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
-        for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())
-    
-    #method to add instruction to the reservation stations - will need to add feature for register renaming
-    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF, robAlias, ROB: ReorderBuffer, PC):
-        #find next available RS if there is one - do this first as the rest doesn't matter if no RS available
-        nextEntry = self.availableRS()
-        if nextEntry == -1:
-            # This should be checked BEFORE calling this function
-            raise Exception("IntAdder attempting to issue with no available RS")
-        #else, nextEntry contains the first available RS entry that will be used
-        
-        #print("IntAdder RS " +str(nextEntry)+ " new entry: ", instr)
-        
-        #FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
-        dep1 = None #RAT.lookup(instr.getField2())
-        dep2 = None
-        value1 = None
-        value2 = None
-        
-        #if it is a traditional add/sub, figure out dependencies and values based on fields 2 and 3
-        if instr.getType() == "ADDI":
-            # Only 1 dependency, field 3 is immediate, otherwise same as ADD/SUB procedure below
-            dep1 = RAT.lookup(instr.getField2())
-            RAT.update(instr.getField1(), robAlias)
-            dest = RAT.lookup(instr.getField1())
-            if dep1 == instr.getField2():
-                dep1 = "None"
-                value1 = intARF.lookup(instr.getField2())
-            # Place immediate value
-            dep2 = "None"
-            value2 = int(instr.getField3())
-            # Check ROB if value is ready immediately
-            if ROB.searchEntries(dep1) != None:
-                #if the value returned is not None, then a value has been produced and may be used
-                value1 = ROB.searchEntries(dep1)
-                dep1 = "None"
+	def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
+		self.rs_count = rs_count
+		self.ex_cycles = ex_cycles
+		self.fu_count = fu_count
+		self.rs = []
+		self.currentExe = -1 #-1 if nothing being executed or RS entry if something is in progress
+		self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
+		for _ in range(rs_count):
+			self.rs.append(ReservationStationEntry())
 
-        elif instr.getType() != "BEQ" and instr.getType() != "BNE":
-            #need to grab deps before updating RAT, or else the dependency may be overwritten by the new ROB alias
-            dep1 = RAT.lookup(instr.getField2())
-            dep2 = RAT.lookup(instr.getField3())
-            #dependencies obtained, update RAT
-            RAT.update(instr.getField1(), robAlias)
-            #and finally set the destination as this instructions ROB entry (could prob just use dest = robAlias here)
-            dest = RAT.lookup(instr.getField1())
-            #check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
-            if dep1 == instr.getField2():
-                dep1 = "None"
-                value1 = intARF.lookup(instr.getField2())
-            if dep2 == instr.getField3():
-                dep2 = "None"
-                value2 = intARF.lookup(instr.getField3())
-                
-            #also need to check if values are ready immediately within the ROB
-            if ROB.searchEntries(dep1) != None:
-                #if the value returned is not None, then a value has been produced and may be used
-                value1 = ROB.searchEntries(dep1)
-                dep1 = "None"
-            if ROB.searchEntries(dep2) != None:
-                #if the value returned is not None, then a value has been produced and may be used
-                value2 = ROB.searchEntries(dep2)
-                dep2 = "None"
-            
-        else: #else, it is a branch, structured as bne/beq Rs, Rt, offset -> comparing Rs to Rt so need to determine deps and values on fields 1 and 2
-            #grab dependencies and destination, don't need to worry about register renaming for branches
-            dep1 = RAT.lookup(instr.getField1())
-            dep2 = RAT.lookup(instr.getField2())
-            dest = RAT.lookup(instr.getField1())
-            #check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
-            if dep1 == instr.getField1():
-                dep1 = "None"
-                value1 = intARF.lookup(instr.getField1())
-            if dep2 == instr.getField2():
-                dep2 = "None"
-                value2 = intARF.lookup(instr.getField2())
-                
-            #also need to check if values are ready immediately within the ROB
-            if ROB.searchEntries(dep1) != None:
-                #if the value returned is not None, then a value has been produced and may be used
-                value1 = ROB.searchEntries(dep1)
-                dep1 = "None"
-            if ROB.searchEntries(dep2) != None:
-                #if the value returned is not None, then a value has been produced and may be used
-                value2 = ROB.searchEntries(dep2)
-                dep2 = "None"
-        
-        #now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
-        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
-        print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
-            
-    #method to fetch next ready instr for execution
-    def fetchNext(self, cycle):
-        #check if an instruction is already in flight - since no pipelining return if one is in progress
-        if self.currentExe != -1:
-            return
-        #look through reservation stations to find an entry with both fields ready and no dependencies
-        #specifically look oldest to newest to ensure an older instruction gets priority to execute
-        for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
-            #check for no dependencies and ensure it is not beginning exe on the same cycle it was issued
-            if entry.canExecute(cycle):
-                #if no deps, execute this one
-                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
-                self.currentExe = self.rs.index(entry)
-                self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
-                entry.fetchInstr().setExStart(cycle)
-                break
-                
-                
-    #method to execute the next instr chosen
-    def exeInstr(self, cycle, CDB):
-        #first check if an instr is actually in flight, if not, just jump out
-        if self.currentExe == -1:
-            return (-1,-1)
-    
-        #increment the count of cycles in exe stage
-        self.cyclesInProgress = self.cyclesInProgress + 1
-        #make sure the cycles executed thus far is still < the # it takes
-        if self.cyclesInProgress < self.ex_cycles:
-            #return, still need to exe for more cycles
-            return (-1,-1)
-        
-        #else, the cycles in exe have completed, compute the actual result and send it over the CDB to ROB and release RS
-        result = None
-        curOp = self.rs[self.currentExe].fetchOp()
-        if curOp == "ADD" or curOp == "ADDI":
-            result = self.rs[self.currentExe].fetchValue1() + self.rs[self.currentExe].fetchValue2()
-        elif curOp == "SUB" or curOp == "BEQ" or curOp == "BNE":
-            #use subtraction for branch instructions as well, BEQ if Rs - Rt = 0 and BNE if Rs - Rt != 0
-            result = self.rs[self.currentExe].fetchValue1() - self.rs[self.currentExe].fetchValue2()
-        
-        
-        print("Result of ", self.rs[self.currentExe].fetchInstr(), " is ", str(result))
-        #saving these 2 values now before they are cleared, for branch instruction resolution
-        instrPC = self.rs[self.currentExe].fetchInstr().getPC()
-        instrField3 = self.rs[self.currentExe].fetchInstr().getField3()
-        
-        #send to CDB buffer and clear FU, mark RS done
-        CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
-        self.rs[self.currentExe].fetchInstr().setExEnd(cycle)
-        self.rs[self.currentExe].markDone()
-        self.currentExe = -1
-        self.cyclesInProgress = 0
-        
-        return (result, instrPC, instrField3)
-        
-    #method to grab the instruction currently being executed (if any)
-    def clearSpeculativeExe(self, entryToClear):
-        #first check if an instr is actually in flight, if not, just jump out
-        if self.currentExe == -1:
-            return -1
-            
-        #print("entryToClear = ", entryToClear)
-        
-        #otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
-        if self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
-            self.currentExe = -1
-        
-    #method to print the instruction in progress and cycle(s) been in exe stage
-    def printExe(self):
-        print("-------------------------------------")
-        print("INT ADDER EXE INFO")
-        print("Reservation station: ", str(self.currentExe))
-        print("Instr in progress is: ", str(self.rs[self.currentExe]))
-        print("Cycles in progress: ", str(self.cyclesInProgress))
-        print("-------------------------------------")
-        
+	#method to add instruction to the reservation stations - will need to add feature for register renaming
+	def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, intARF: IntegerARF, robAlias, ROB: ReorderBuffer, PC):
+		#find next available RS if there is one - do this first as the rest doesn't matter if no RS available
+		nextEntry = self.availableRS()
+		if nextEntry == -1:
+			# This should be checked BEFORE calling this function
+			raise Exception("IntAdder attempting to issue with no available RS")
+		#else, nextEntry contains the first available RS entry that will be used
+		
+		#print("IntAdder RS " +str(nextEntry)+ " new entry: ", instr)
+		
+		#FIGURE OUT DEPENDENCIES HERE FOR THE REGISTERS IN USE BY CHECKING THE RAT
+		dep1 = "None" #RAT.lookup(instr.getField2())
+		dep2 = "None"
+		value1 = None
+		value2 = None
+		
+		#if it is a traditional add/sub, figure out dependencies and values based on fields 2 and 3
+		if instr.getType() == "ADDI":
+			# Only 1 dependency, field 3 is immediate, otherwise same as ADD/SUB procedure below
+			dep1 = RAT.lookup(instr.getField2())
+			RAT.update(instr.getField1(), robAlias)
+			dest = RAT.lookup(instr.getField1())
+			if dep1 == instr.getField2():
+				dep1 = "None"
+				value1 = intARF.lookup(instr.getField2())
+			# Place immediate value
+			dep2 = "None"
+			value2 = int(instr.getField3())
+			# Check ROB if value is ready immediately
+			if ROB.searchEntries(dep1) != None:
+				#if the value returned is not None, then a value has been produced and may be used
+				value1 = ROB.searchEntries(dep1)
+				dep1 = "None"
 
-    def __str__(self) -> str:
-        pass
+		elif instr.getType() != "BEQ" and instr.getType() != "BNE":
+			#need to grab deps before updating RAT, or else the dependency may be overwritten by the new ROB alias
+			dep1 = RAT.lookup(instr.getField2())
+			dep2 = RAT.lookup(instr.getField3())
+			#dependencies obtained, update RAT
+			RAT.update(instr.getField1(), robAlias)
+			#and finally set the destination as this instructions ROB entry (could prob just use dest = robAlias here)
+			dest = RAT.lookup(instr.getField1())
+			#check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
+			if dep1 == instr.getField2():
+				dep1 = "None"
+				value1 = intARF.lookup(instr.getField2())
+			if dep2 == instr.getField3():
+				dep2 = "None"
+				value2 = intARF.lookup(instr.getField3())
+				
+			#also need to check if values are ready immediately within the ROB
+			if ROB.searchEntries(dep1) != None:
+				#if the value returned is not None, then a value has been produced and may be used
+				value1 = ROB.searchEntries(dep1)
+				dep1 = "None"
+			if ROB.searchEntries(dep2) != None:
+				#if the value returned is not None, then a value has been produced and may be used
+				value2 = ROB.searchEntries(dep2)
+				dep2 = "None"
+			
+		else: #else, it is a branch, structured as bne/beq Rs, Rt, offset -> comparing Rs to Rt so need to determine deps and values on fields 1 and 2
+			#grab dependencies and destination, don't need to worry about register renaming for branches
+			dep1 = RAT.lookup(instr.getField1())
+			dep2 = RAT.lookup(instr.getField2())
+			dest = RAT.lookup(instr.getField1())
+			#check if the deps are actually just the field names, if so, no deps exist, also must grab values from ARF
+			if dep1 == instr.getField1():
+				dep1 = "None"
+				value1 = intARF.lookup(instr.getField1())
+			if dep2 == instr.getField2():
+				dep2 = "None"
+				value2 = intARF.lookup(instr.getField2())
+				
+			#also need to check if values are ready immediately within the ROB
+			if ROB.searchEntries(dep1) != None:
+				#if the value returned is not None, then a value has been produced and may be used
+				value1 = ROB.searchEntries(dep1)
+				dep1 = "None"
+			if ROB.searchEntries(dep2) != None:
+				#if the value returned is not None, then a value has been produced and may be used
+				value2 = ROB.searchEntries(dep2)
+				dep2 = "None"
+		
+		#now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
+		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+		print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
+			
+	#method to fetch next ready instr for execution
+	def fetchNext(self, cycle):
+		#check if an instruction is already in flight - since no pipelining return if one is in progress
+		if self.currentExe != -1:
+			return
+		#look through reservation stations to find an entry with both fields ready and no dependencies
+		#specifically look oldest to newest to ensure an older instruction gets priority to execute
+		for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
+			#check for no dependencies and ensure it is not beginning exe on the same cycle it was issued
+			if entry.canExecute(cycle):
+				#if no deps, execute this one
+				print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
+				self.currentExe = self.rs.index(entry)
+				self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
+				entry.fetchInstr().setExStart(cycle)
+				break
+				
+				
+	#method to execute the next instr chosen
+	def exeInstr(self, cycle, CDB):
+		#first check if an instr is actually in flight, if not, just jump out
+		if self.currentExe == -1:
+			return (-1,-1)
+
+		#increment the count of cycles in exe stage
+		self.cyclesInProgress = self.cyclesInProgress + 1
+		#make sure the cycles executed thus far is still < the # it takes
+		if self.cyclesInProgress < self.ex_cycles:
+			#return, still need to exe for more cycles
+			return (-1,-1)
+		
+		#else, the cycles in exe have completed, compute the actual result and send it over the CDB to ROB and release RS
+		result = None
+		curOp = self.rs[self.currentExe].fetchOp()
+		if curOp == "ADD" or curOp == "ADDI":
+			result = self.rs[self.currentExe].fetchValue1() + self.rs[self.currentExe].fetchValue2()
+		elif curOp == "SUB" or curOp == "BEQ" or curOp == "BNE":
+			#use subtraction for branch instructions as well, BEQ if Rs - Rt = 0 and BNE if Rs - Rt != 0
+			result = self.rs[self.currentExe].fetchValue1() - self.rs[self.currentExe].fetchValue2()
+		
+		
+		print("Result of ", self.rs[self.currentExe].fetchInstr(), " is ", str(result))
+		#saving these 2 values now before they are cleared, for branch instruction resolution
+		instrPC = self.rs[self.currentExe].fetchInstr().getPC()
+		instrField3 = self.rs[self.currentExe].fetchInstr().getField3()
+		
+		#send to CDB buffer and clear FU, mark RS done
+		CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
+		self.rs[self.currentExe].fetchInstr().setExEnd(cycle)
+		self.rs[self.currentExe].markDone()
+		self.currentExe = -1
+		self.cyclesInProgress = 0
+		
+		return (result, instrPC, instrField3)
+		
+	#method to grab the instruction currently being executed (if any)
+	def clearSpeculativeExe(self, entryToClear):
+		#first check if an instr is actually in flight, if not, just jump out
+		if self.currentExe == -1:
+			return -1
+			
+		#print("entryToClear = ", entryToClear)
+		
+		#otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
+		if self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
+			self.currentExe = -1
+		
+	#method to print the instruction in progress and cycle(s) been in exe stage
+	def printExe(self):
+		print("-------------------------------------")
+		print("INT ADDER EXE INFO")
+		print("Reservation station: ", str(self.currentExe))
+		print("Instr in progress is: ", str(self.rs[self.currentExe]))
+		print("Cycles in progress: ", str(self.cyclesInProgress))
+		print("-------------------------------------")
+		
+
+	def __str__(self) -> str:
+		pass
 
 #float adder is pipelined
 class FloatAdder(unitWithRS):
-    def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
-        self.rs_count = rs_count
-        self.ex_cycles = ex_cycles
-        self.fu_count = fu_count
-        self.rs = []
-        self.executing = [-1] * rs_count # corresponds to the stage of each RS in execution
-        for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())
-            
-    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, fpARF: FloatARF, robAlias, ROB: ReorderBuffer, PC):
-        # mostly similar to integer adder, only commenting on differences
-        nextEntry = self.availableRS()
-        if nextEntry == -1:
-            raise Exception("FpAdder attempting to issue with no available RS")
-        
-        # dont need to check type, both add/sub behave the same
-        dep1 = RAT.lookup(instr.getField2())
-        dep2 = RAT.lookup(instr.getField3())
-        value1 = None
-        value2 = None
-        RAT.update(instr.getField1(), robAlias)
-        dest = RAT.lookup(instr.getField1())
-        if dep1 == instr.getField2():
-            dep1 = "None"
-            value1 = fpARF.lookup(instr.getField2())
-        if dep2 == instr.getField3():
-            dep2 = "None"
-            value2 = fpARF.lookup(instr.getField3())
+	def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
+		self.rs_count = rs_count
+		self.ex_cycles = ex_cycles
+		self.fu_count = fu_count
+		self.rs = []
+		self.executing = [-1] * rs_count # corresponds to the stage of each RS in execution
+		for _ in range(rs_count):
+			self.rs.append(ReservationStationEntry())
+			
+	def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, fpARF: FloatARF, robAlias, ROB: ReorderBuffer, PC):
+		# mostly similar to integer adder, only commenting on differences
+		nextEntry = self.availableRS()
+		if nextEntry == -1:
+			raise Exception("FpAdder attempting to issue with no available RS")
+		
+		# dont need to check type, both add/sub behave the same
+		dep1 = RAT.lookup(instr.getField2())
+		dep2 = RAT.lookup(instr.getField3())
+		value1 = None
+		value2 = None
+		RAT.update(instr.getField1(), robAlias)
+		dest = RAT.lookup(instr.getField1())
+		if dep1 == instr.getField2():
+			dep1 = "None"
+			value1 = fpARF.lookup(instr.getField2())
+		if dep2 == instr.getField3():
+			dep2 = "None"
+			value2 = fpARF.lookup(instr.getField3())
 
-        if ROB.searchEntries(dep1) != None:
-            value1 = ROB.searchEntries(dep1)
-            dep1 = "None"
-        if ROB.searchEntries(dep2) != None:
-            value2 = ROB.searchEntries(dep2)
-            dep2 = "None"
+		if ROB.searchEntries(dep1) != None:
+			value1 = ROB.searchEntries(dep1)
+			dep1 = "None"
+		if ROB.searchEntries(dep2) != None:
+			value2 = ROB.searchEntries(dep2)
+			dep2 = "None"
 
-        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
-        print("FpAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
-    
-    def fetchNext(self, cycle):
-        #loop through RS to find an entry ready to execute, prioritize oldest
-        for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
-            idx = self.rs.index(entry)
-            if self.executing[idx] != -1:
-                continue
-            elif entry.canExecute(cycle):
-                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
-                self.executing[idx] = 0
-                entry.fetchInstr().setExStart(cycle)
-                break
+		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+		print("FpAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 
-    def exeInstr(self, cycle, CDB):
-        done = False
-        for idx, exe in enumerate(self.executing):
-            # check if executing
-            if exe == -1:
-                continue
-            self.executing[idx] += 1
-            # check if not finished
-            if self.executing[idx] < self.ex_cycles:
-                continue
-            
-            # it has finished
-            if done:
-                raise Exception("Two instructions finished at same time in FpAdder, cycle: " + str(cycle))
-            done = True
-            result = None
-            curOp = self.rs[idx].fetchOp()
-            if curOp == "ADD.D":
-                result = self.rs[idx].fetchValue1() + self.rs[idx].fetchValue2()
-            else:
-                result = self.rs[idx].fetchValue1() - self.rs[idx].fetchValue2()
-            print("Result of ", self.rs[idx].fetchInstr(), " is ", str(result))
+	def fetchNext(self, cycle):
+		#loop through RS to find an entry ready to execute, prioritize oldest
+		for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
+			idx = self.rs.index(entry)
+			if self.executing[idx] != -1:
+				continue
+			elif entry.canExecute(cycle):
+				print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
+				self.executing[idx] = 0
+				entry.fetchInstr().setExStart(cycle)
+				break
 
-            CDB.newFpAdd(self.rs[idx], result, cycle)
-            self.rs[idx].fetchInstr().setExEnd(cycle)
-            self.rs[idx].markDone()
-            self.executing[idx] = -1
+	def exeInstr(self, cycle, CDB):
+		done = False
+		for idx, exe in enumerate(self.executing):
+			# check if executing
+			if exe == -1:
+				continue
+			self.executing[idx] += 1
+			# check if not finished
+			if self.executing[idx] < self.ex_cycles:
+				continue
+			
+			# it has finished
+			if done:
+				raise Exception("Two instructions finished at same time in FpAdder, cycle: " + str(cycle))
+			done = True
+			result = None
+			curOp = self.rs[idx].fetchOp()
+			if curOp == "ADD.D":
+				result = self.rs[idx].fetchValue1() + self.rs[idx].fetchValue2()
+			else:
+				result = self.rs[idx].fetchValue1() - self.rs[idx].fetchValue2()
+			print("Result of ", self.rs[idx].fetchInstr(), " is ", str(result))
 
-    def clearSpeculativeExe(self, entryToClear):
-        for idx, exe in enumerate(self.executing):
-            # check if the instr is a recently resolved mispredicted branch
-            if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
-                self.executing[idx] = -1
+			CDB.newFpAdd(self.rs[idx], result, cycle)
+			self.rs[idx].fetchInstr().setExEnd(cycle)
+			self.rs[idx].markDone()
+			self.executing[idx] = -1
+
+	def clearSpeculativeExe(self, entryToClear):
+		for idx, exe in enumerate(self.executing):
+			# check if the instr is a recently resolved mispredicted branch
+			if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+				self.executing[idx] = -1
 
 
 class FloatMult(unitWithRS):
-    def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
-        self.rs_count = rs_count
-        self.ex_cycles = ex_cycles
-        self.fu_count = fu_count
-        self.rs = []
-        self.executing = [-1] * rs_count # corresponds to the stage of each RS in execution
-        for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())        
+	def __init__(self, rs_count: int, ex_cycles: int, fu_count: int) -> None:
+		self.rs_count = rs_count
+		self.ex_cycles = ex_cycles
+		self.fu_count = fu_count
+		self.rs = []
+		self.executing = [-1] * rs_count # corresponds to the stage of each RS in execution
+		for _ in range(rs_count):
+			self.rs.append(ReservationStationEntry())        
 
-    def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, fpARF: FloatARF, robAlias, ROB: ReorderBuffer, PC):
-        # mostly similar to integer adder, only commenting on differences
-        nextEntry = self.availableRS()
-        if nextEntry == -1:
-            raise Exception("FpMult attempting to issue with no available RS")
-        
-        # dont need to check type, both add/sub behave the same
-        dep1 = RAT.lookup(instr.getField2())
-        dep2 = RAT.lookup(instr.getField3())
-        value1 = None
-        value2 = None
-        RAT.update(instr.getField1(), robAlias)
-        dest = RAT.lookup(instr.getField1())
-        if dep1 == instr.getField2():
-            dep1 = "None"
-            value1 = fpARF.lookup(instr.getField2())
-        if dep2 == instr.getField3():
-            dep2 = "None"
-            value2 = fpARF.lookup(instr.getField3())
+	def issueInstruction(self, instr: Instruction, cycle, RAT: RegisterAliasTable, fpARF: FloatARF, robAlias, ROB: ReorderBuffer, PC):
+		# mostly similar to integer adder, only commenting on differences
+		nextEntry = self.availableRS()
+		if nextEntry == -1:
+			raise Exception("FpMult attempting to issue with no available RS")
+		
+		# dont need to check type, both add/sub behave the same
+		dep1 = RAT.lookup(instr.getField2())
+		dep2 = RAT.lookup(instr.getField3())
+		value1 = None
+		value2 = None
+		RAT.update(instr.getField1(), robAlias)
+		dest = RAT.lookup(instr.getField1())
+		if dep1 == instr.getField2():
+			dep1 = "None"
+			value1 = fpARF.lookup(instr.getField2())
+		if dep2 == instr.getField3():
+			dep2 = "None"
+			value2 = fpARF.lookup(instr.getField3())
 
-        if ROB.searchEntries(dep1) != None:
-            value1 = ROB.searchEntries(dep1)
-            dep1 = "None"
-        if ROB.searchEntries(dep2) != None:
-            value2 = ROB.searchEntries(dep2)
-            dep2 = "None"
+		if ROB.searchEntries(dep1) != None:
+			value1 = ROB.searchEntries(dep1)
+			dep1 = "None"
+		if ROB.searchEntries(dep2) != None:
+			value2 = ROB.searchEntries(dep2)
+			dep2 = "None"
 
-        self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
-        print("FpMult RS ", str(nextEntry), " update: ", self.rs[nextEntry])
-    
-    def fetchNext(self, cycle):
-        #loop through RS to find an entry ready to execute, prioritize oldest
-        for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
-            idx = self.rs.index(entry)
-            if self.executing[idx] != -1:
-                continue
-            elif entry.canExecute(cycle):
-                print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
-                self.executing[idx] = 0
-                entry.fetchInstr().setExStart(cycle)
-                break
+		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+		print("FpMult RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 
-    def exeInstr(self, cycle, CDB):
-        done = False
-        for idx, exe in enumerate(self.executing):
-            # check if executing
-            if exe == -1:
-                continue
-            self.executing[idx] += 1
-            # check if not finished
-            if self.executing[idx] < self.ex_cycles:
-                continue
-            
-            # it has finished
-            if done:
-                raise Exception("Two instructions finished at same time in FpMult, cycle: " + str(cycle))
-            done = True
-            result = None
-            curOp = self.rs[idx].fetchOp()
-            if curOp == "MULT.D":
-                result = float(self.rs[idx].fetchValue1()) * float(self.rs[idx].fetchValue2())
-            else:
-                raise Exception("FpMult attempting to execute made-up op: " + str(curOp))
-            print("Result of ", self.rs[idx].fetchInstr(), " is ", str(result))
+	def fetchNext(self, cycle):
+		#loop through RS to find an entry ready to execute, prioritize oldest
+		for entry in sorted(self.rs, key=lambda e: e.fetchCycle()):
+			idx = self.rs.index(entry)
+			if self.executing[idx] != -1:
+				continue
+			elif entry.canExecute(cycle):
+				print("Executing instr: ", entry.fetchInstr(), " from RS ", self.rs.index(entry), " | ", entry)
+				self.executing[idx] = 0
+				entry.fetchInstr().setExStart(cycle)
+				break
 
-            CDB.newFpMult(self.rs[idx], result, cycle)
-            self.rs[idx].fetchInstr().setExEnd(cycle)
-            self.rs[idx].markDone()
-            self.executing[idx] = -1
+	def exeInstr(self, cycle, CDB):
+		done = False
+		for idx, exe in enumerate(self.executing):
+			# check if executing
+			if exe == -1:
+				continue
+			self.executing[idx] += 1
+			# check if not finished
+			if self.executing[idx] < self.ex_cycles:
+				continue
+			
+			# it has finished
+			if done:
+				raise Exception("Two instructions finished at same time in FpMult, cycle: " + str(cycle))
+			done = True
+			result = None
+			curOp = self.rs[idx].fetchOp()
+			if curOp == "MULT.D":
+				result = float(self.rs[idx].fetchValue1()) * float(self.rs[idx].fetchValue2())
+			else:
+				raise Exception("FpMult attempting to execute made-up op: " + str(curOp))
+			print("Result of ", self.rs[idx].fetchInstr(), " is ", str(result))
 
-    def clearSpeculativeExe(self, entryToClear):
-        for idx, exe in enumerate(self.executing):
-            # check if the instr is a recently resolved mispredicted branch
-            if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
-                self.executing[idx] = -1
-                
+			CDB.newFpMult(self.rs[idx], result, cycle)
+			self.rs[idx].fetchInstr().setExEnd(cycle)
+			self.rs[idx].markDone()
+			self.executing[idx] = -1
+
+	def clearSpeculativeExe(self, entryToClear):
+		for idx, exe in enumerate(self.executing):
+			# check if the instr is a recently resolved mispredicted branch
+			if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+				self.executing[idx] = -1
+				
 
 class MemoryUnit(unitWithRS):
-    def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
-        self.rs_count = rs_count 
-        self.ex_cycles = ex_cycles
-        self.mem_cycles = mem_cycles
-        self.fu_count = fu_count
-        self.currentExe = -1 #-1 if nothing being executed or value of queue entry if something is in progress
-        self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
-        self.memory = [None] * 64 #256 Bytes -> 64 Words
-        self.rs = [] #called rs to make use of the inheritance, but it is actually a FIFO queue
-        self.head = 0 #location of the top of the FIFO
-        self.tail = 0 #location of the end of the FIFO (next place to fill an entry, not occupied)
-        self.currentExe = -1 #-1 if nothing being executed or queue entry if something is in progress
-        self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
-        for _ in range(rs_count):
-            self.rs.append(ReservationStationEntry())
-            
-    #method to update memory value
-    def updateMemory(self, address, newValue):
-        #check if address is > 256 which is the limit
-        if address > 256:
-            print("Trying to update a memory value beyond the 256 Bytes! Value: ", address)
-        #also check if memory address is not cleanly divisible by 4, which will cause problems
-        if address % 4 != 0:
-            print("The address ", address, " is not cleanly divisible by 4! Incorrect memory may be fetched!")
-        #address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
-        self.memory[address/4] = newValue
-        
-    #method to grab a requested memory value
-    def getMemory(self, address):
-        #check if address is > 256 which is the limit
-        if address > 256:
-            print("Trying to fetch a memory value beyond the 256 Bytes! Value: ", address)
-        #also check if memory address is not cleanly divisible by 4, which will cause problems
-        if address % 4 != 0:
-            print("The address ", address, " is not cleanly divisible by 4! Incorrect memory may be fetched!")
-        #address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
-        return self.memory[address/4]    
-    
-    #method to check if any available entries in queue
-    def nextAvailableEntry(self):
-        #check if full, if yes, return -1
-        if self.rs.isFull():
-            return -1
-        #otherwise, return the next entry to insert an item
-        return self.tail
-    
-    #method to add an entry to the queue
-    #def addEntry(self, PC, dep1, dep2, value1, value2, instr, cycle):
-        #self.queue.addEntry(PC, dep1, dep2, value1, value2, instr, cycle)
-        
-    #method to pop an entry from the queue - ONLY DONE IN FIFO MANNER
-    def popEntry(self):
-        self.rs.popEntry()
-        
-    #method returns True if the value for Ra is known and we are not dependent/waiting on a value, also if other conds are met
-    def canExecuteLDSD(self, currCycle):
-        return self.op != "None" and self.fetchDep2() == "None" and currCycle > self.cycle and self.done == 0    
-        
-        
-    #method to (try) and issue instructions
-    def issueInstruction(self, instr, cycle, RAT, fpARF, robAlias, ROB, PC):
-        #grab the next available entry in the LS Queue
-        nextEntry = self.nextAvailableEntry()
-        if nextEntry == -1:
-            raise Exception("Load/Store Queue attempting to issue with no available entries")
-        
-        #declare these variables outside the if statements then populate within
-        dep1 = None
-        dep2 = None
-        value1 = None
-        value2 = None
-        
-        #have different cases for handling dependencies between loads and stores
-        if instr.getType() == "LD":
-            #if load, looks like this: LD Fa, offset(Ra), where we are loading value at addr offset+Ra into Fa
-            #thus, depend upon Ra before we can perform the address computation
-            dep1 = None #this isn't used for LD
-            dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
-            #now update the RAT with the new destination
-            RAT.update(instr.getField1(), robAlias)
-            dest = RAT.lookup(instr.getField1())
-            #check if we can resolve the dependency (dep2) right away in 2 ways - no need to solve dep1 as it isnt a dependency
-            #1. check if the dependency is just the original register name in the ARF
-            if dep2 == instr.getField3():
-                dep2 = "None"
-                value2 = fpARF.lookup(instr.getField3())
-            #2. check if value exists in ROB but hasn't been committed yet
-            if ROB.searchEntries(dep2) != None:
-                value2 = ROB.searchEntries(dep2)
-                dep2 = "None"
-        else:
-            #else, it is a store and looks like this: SD Fa, offset(Ra), storing value in Fa to addr offset+Ra
-            #thus, depend on both Fa and Ra
-            dep1 = RAT.lookup(instr.Field1()) #this dependency is for the value being stored - Fa
-            dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
-            #no need to update RAT for the store instruction, nothing is going to be written back
-            #check if we can resolve the dependencies right away in 2 ways
-            #1. check if the dependency is just the original register name in the ARF
-            if dep1 == instr.getField1():
-                dep1 = "None"
-                value1 = fpARF.lookup(instr.getField1())
-            if dep2 == instr.getField3():
-                dep2 = "None"
-                value2 = fpARF.lookup(instr.getField3())
-            #2. check if value exists in ROB but hasn't been committed yet
-            if ROB.searchEntries(dep1) != None:
-                value1 = ROB.searchEntries(dep1)
-                dep1 = "None"
-            if ROB.searchEntries(dep2) != None:
-                value2 = ROB.searchEntries(dep2)
-                dep2 = "None"
-                
-        #finally, add this instruction to the load/store queue
-        self.populateLSQueue(tail, instr.getType(), None, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry(), instr.getField2(), robAlias)
-        #increment tail 
-        self.tail = self.tail + 1
+	def __init__(self, rs_count: int, ex_cycles: int, mem_cycles: int, fu_count: int) -> None:
+		self.rs_count = rs_count 
+		self.ex_cycles = ex_cycles
+		self.mem_cycles = mem_cycles
+		self.fu_count = fu_count
+		self.currentExe = -1 #-1 if nothing being executed or value of queue entry if something is in progress
+		self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
+		self.memory = [None] * 64 #256 Bytes -> 64 Words
+		self.rs = [] #called rs to make use of the inheritance, but it is actually a FIFO queue
+		self.head = 0 #location of the top of the FIFO
+		self.tail = 0 #location of the end of the FIFO (next place to fill an entry, not occupied)
+		self.currentExe = -1 #-1 if nothing being executed or queue entry if something is in progress
+		self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
+		self.currentLDorSD = -1 #similar to currentExe, will be -1 if no LD or SD in progress and the queue entry if one is in progress
+		self.MemCyclesInProgress = 0 #similar to cyclesInProgress but for MEM instead of EXE stage
+		for _ in range(rs_count):
+			self.rs.append(ReservationStationEntry())
+			
+	#method to update memory value
+	def updateMemory(self, address, newValue):
+		#check if address is > 256 which is the limit
+		if address > 256:
+			print("Trying to update a memory value beyond the 256 Bytes! Value: ", address)
+		#also check if memory address is not cleanly divisible by 4, which will cause problems
+		temp = address
+		if temp % 4 != 0:
+			print("The address ", address, " is not cleanly divisible by 4! Incorrect memory may be fetched!")
+		#address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
+		self.memory[int(address/4)] = newValue
+		
+	#method to grab a requested memory value
+	def getMemory(self, address):
+		#check if address is > 256 which is the limit
+		if address > 256:
+			print("Trying to fetch a memory value beyond the 256 Bytes! Value: ", address)
+		#also check if memory address is not cleanly divisible by 4, which will cause problems
+		temp = address
+		if temp % 4 != 0:
+			print("The address ", address, " is not cleanly divisible by 4! Incorrect memory may be fetched!")
+		#address will be byte addressed e.g. 0,4,8, so divide by 4 for word addressed
+		return self.memory[int(address/4)]    
 
-    #method to fetch next ready instr for execution
-    #NOTE: I think the addresses may be calculated out of order, but the actual fetching/storing of memory must be carefully ordered
-    def fetchNext(self, cycle):
-        #check if an instruction is already in flight - since no pipelining return if one is in progress
-        if self.currentExe != -1:
-            return
-        #look through the queue to find an entry without any dependencies, and both values ready
-        #look from head of queue to tail of queue to traverse the list in order of issue
-        for index in range(head,tail):
-            #grab the entry for this index
-            entry = self.rs[index]
-            
-            #if the instruction has no dependencies, send it off to calculate the address in the exe stage
-            if entry.canExecuteLDSD(cycle):
-                #if no deps, execute this one
-                print("Executing instr: ", entry.fetchInstr(), " from Queue index ", self.rs.index(entry), " | ", entry)
-                self.currentExe = self.rs.index(entry)
-                self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
-                entry.fetchInstr().setExStart(cycle)
-                break
+	#method to print the memory values
+	def printMemory(self):
+		for value in self.memory:
+			if value != None:
+				print("MEM[", self.memory.index(value), "] = ", value)
+
+	#method to check if any available entries in queue
+	def nextAvailableEntry(self):
+		#check if full, if yes, return -1
+		if self.head == self.tail and self.rs[self.head].fetchInstr() != None:
+			return -1
+		#otherwise, return the next entry to insert an item
+		return self.tail
+
+	#method to add an entry to the queue
+	#def addEntry(self, PC, dep1, dep2, value1, value2, instr, cycle):
+		#self.queue.addEntry(PC, dep1, dep2, value1, value2, instr, cycle)
+		
+	#method to pop an entry from the queue - ONLY DONE IN FIFO MANNER
+	def popEntry(self):
+		self.rs.popEntry()  
+		
+	#method to (try) and issue instructions
+	def issueInstruction(self, instr, cycle, RAT, intARF, fpARF, robAlias, ROB, PC):
+		#grab the next available entry in the LS Queue
+		nextEntry = self.nextAvailableEntry()
+		if nextEntry == -1:
+			raise Exception("Load/Store Queue attempting to issue with no available entries")
+		
+		#declare these variables outside the if statements then populate within
+		dest = None
+		dep1 = "None"
+		dep2 = "None"
+		value1 = None
+		value2 = None
+		
+		#have different cases for handling dependencies between loads and stores
+		if instr.getType() == "LD":
+			#if load, looks like this: LD Fa, offset(Ra), where we are loading value at addr offset+Ra into Fa
+			#thus, depend upon Ra before we can perform the address computation
+			dep1 = "None" #this isn't used for LD
+			dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
+			#now update the RAT with the new destination
+			RAT.update(instr.getField1(), robAlias)
+			dest = RAT.lookup(instr.getField1())
+			#check if we can resolve the dependency (dep2) right away in 2 ways - no need to solve dep1 as it isnt a dependency
+			#1. check if the dependency is just the original register name in the ARF
+			if dep2 == instr.getField3():
+				dep2 = "None"
+				value2 = intARF.lookup(instr.getField3())
+			#2. check if value exists in ROB but hasn't been committed yet
+			if ROB.searchEntries(dep2) != None:
+				value2 = ROB.searchEntries(dep2)
+				dep2 = "None"
+		else:
+			#else, it is a store and looks like this: SD Fa, offset(Ra), storing value in Fa to addr offset+Ra
+			#thus, depend on both Fa and Ra
+			dep1 = RAT.lookup(instr.getField1()) #this dependency is for the value being stored - Fa
+			dep2 = RAT.lookup(instr.getField3()) #this corresponds to the Ra within the instruction
+			#no need to update RAT for the store instruction, nothing is going to be written back
+			#check if we can resolve the dependencies right away in 2 ways
+			#1. check if the dependency is just the original register name in the ARF
+			if dep1 == instr.getField1():
+				dep1 = "None"
+				value1 = fpARF.lookup(instr.getField1())
+			if dep2 == instr.getField3():
+				dep2 = "None"
+				value2 = intARF.lookup(instr.getField3())
+			#2. check if value exists in ROB but hasn't been committed yet
+			if ROB.searchEntries(dep1) != None:
+				value1 = ROB.searchEntries(dep1)
+				dep1 = "None"
+			if ROB.searchEntries(dep2) != None:
+				value2 = ROB.searchEntries(dep2)
+				dep2 = "None"
+				
+		#finally, add this instruction to the load/store queue
+		self.populateLSQueue(self.tail, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry(), instr.getField2(), robAlias)
+		#increment tail 
+		self.tail = self.tail + 1
+
+	#method to fetch next ready instr for execution
+	#NOTE: I think the addresses may be calculated out of order, but the actual fetching/storing of memory must be carefully ordered
+	def fetchNext(self, cycle):
+		#check if an instruction is already in flight - since no pipelining then we return if one is in progress
+		if self.currentExe != -1:
+			return
+		#look through the queue to find an entry without any dependencies, and both values ready
+		#look from head of queue to tail of queue to traverse the list in order of issue
+		for index in range(self.head,self.tail):
+			#grab the entry for this index
+			entry = self.rs[index]
+			
+			#if the instruction has no dependencies, and has not already been completed, send it off to calculate the address in the exe stage
+			if entry.canExecute(cycle) and entry.fetchDone() != 1:
+				#if no deps, execute this one
+				#print("Executing instr: ", entry.fetchInstr(), " from Queue index ", self.rs.index(entry), " | ", entry)
+				self.currentExe = self.rs.index(entry)
+				self.cyclesInProgress = 0 #reset this value, will go 0->ex_cycles
+				entry.fetchInstr().setExStart(cycle)
+				break
 
 
-    #method to execute the next instr in the queue (if ready)
-    def exeInstr(self, cycle, CDB):
-        #first check if an instr is actually in flight, if not, just jump out
-        if self.currentExe == -1:
-            return 
-    
-        #increment the count of cycles in exe stage
-        self.cyclesInProgress = self.cyclesInProgress + 1
-        #make sure the cycles executed thus far is still < the # it takes
-        if self.cyclesInProgress < self.ex_cycles:
-            #return, still need to exe for more cycles
-            return 
-        
-        #else, the cycles in exe have completed, compute the actual result, which is the address to LD or SD from
-        address = self.rs[self.currentExe].fetchOffset() + self.rs[self.currentExe].fetchValue2()    
-        #place this resulting address within the queue entry
-        self.rs[self.currentExe].updateAddr(address)
-        
-        #address now known, if it is a load, check if any stores that come before are pointing towards the same memory address and have their value ready
-        if self.rs[self.currentExe].fetchOp() == "LD":
-            #must check the list from this LD location up to the head
-            for index in range(self.currentExe, head-1, -1): #subtracting 1 from head to ensure proper bounds
-                #do not care if we see any other loads along the way, not doing load-to-load-forwarding
-                #check if this index is a store and if the address matches this one
-                if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == address:
-                    #if yes, perform forwarding-from-a-store and grab the value now instead of fetching from memory
-                    self.rs[self.currentExe].updateResult(self.rs[index].fetchResult())
-                    #mark the RS as done as well and queue up in CDB buffer for writeback
-                    self.rs[self.currentExe].markDone()
-                    #send to CDB buffer
-                    CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
-                    #since forwarding, need to update the MEM cycles as well
-                    print("Performing forwarding-from-a-store from queue index ", index, " to ", self.currentExe, ", will take from cycles ", cycle, "-", cycle+1)
-                    self.rs[self.currentExe].fetchInstr().setMemStart(cycle)
-                    self.rs[self.currentExe].fetchInstr().setMemEnd(cycle+1)
-                    #NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
-                    break                   
-        elif self.rs[self.currentExe].fetchOp() == "SD":
-            #before anything extra, if this instruction is a store, check if the value being stored is ready, if not, we can't do forwarding no matter what so skip this part
-            if self.rs[self.currentExe].fetchDep1() == "None":
-                #if it is a store and the val is ready, check if any loads that come after it are pointing towards the same memory address, but if another store is seen, check its memory address
-                    #if the address of the load matches this store's, then forward the data
-                    #if the address of the store unknown, return without doing anything
-                    #if the address of the store the same as this stores, then return without doing anything
-                    #if the address of the store different than this store, continue looking down the list
-                #must check the list from this SD location down to the tail
-                for index in range(self.currentExe, tail):
-                    #first checking if it is a load and if the address matches, which is the easier case
-                    if self.rs[index].fetchOp() == "LD" and self.rs[index].fetchAddr() == address:
-                        #if it is a match, perform forwarding-from-a-store and send the value now instead of fetching from memory
-                        self.rs[index].updateResult(self.rs[self.currentExe].fetchResult())
-                        #mark the RS as done as well and queue up in CDB buffer for writeback
-                        self.rs[index].markDone()
-                        #send to CDB buffer
-                        CDB.newIntAdd(self.rs[index], result, cycle)
-                        #since forwarding, need to update the MEM cycles as well
-                        print("Performing forwarding-from-a-store from queue index ", index, " to ", self.currentExe, ", will take from cycles ", cycle, "-", cycle+1)
-                        self.rs[index].fetchInstr().setMemStart(cycle)
-                        self.rs[index].fetchInstr().setMemEnd(cycle+1)
-                        #NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
-                        break                   
-                
-        else:
-            raise Exception("Trying to execute a ", self.rs[self.currentExe].fetchOp(), " instruction within the MemoryUnit!")
-        
-        #print result for fun
-        print("Address calculation for ", self.rs[self.currentExe].fetchInstr(), " is ", str(address))
-        
-        #just mark the end of the exe cycle for this instruction, nothing to do for bcast on CDB and instruction is not actually finished
-        #LD will finish in MEM stage, then can WB
-        #SD will skip MEM and finish in COMMIT stage, doesn't mess with WB
-        self.rs[self.currentExe].fetchInstr().setExEnd(cycle)
-        #self.rs[self.currentExe].markDone()
-        self.currentExe = -1
-        self.cyclesInProgress = 0
-        
-        return 
-    
-    #now things get a little tricky
-    #method to find the next LD or SD to execute
-    #need to traverse list head to tail
-        #make a flag for if we see a store or not
-            #if store seen, mark it true
-            #if this store just seen IS NOT READY to execute, but address IS KNOWN, check the following instructions
-                #if a store comes after it, and IS READY to execute, go ahead and start up this entry in the queue
-                #if a load comes after it, no matter what, just return without sending an instruction to memory
-            #if this store just seen IS NOT READY to execute, but address IS NOT KNOWN, return without sending an instruction to memory
-    #need to check for Forwarding-from-a-Store again
-        #can perform a forward from store even if there is a LD or SD in progress
-            
-    
+	#method to execute the next instr in the queue (if ready)
+	def exeInstr(self, cycle):
+		#first check if an instr is actually in flight, if not, just jump out
+		if self.currentExe == -1:
+			return 
+
+		#increment the count of cycles in exe stage
+		self.cyclesInProgress = self.cyclesInProgress + 1
+		#make sure the cycles executed thus far is still < the # it takes
+		if self.cyclesInProgress < self.ex_cycles:
+			#return, still need to exe for more cycles
+			return 
+		
+		#else, the cycles in exe have completed, compute the actual result, which is the address to LD or SD from
+		address = int(self.rs[self.currentExe].fetchOffset()) + int(self.rs[self.currentExe].fetchValue2())    
+		#place this resulting address within the queue entry
+		self.rs[self.currentExe].updateAddr(address)		
+		
+		#print result for fun
+		print("Address calculation for ", self.rs[self.currentExe].fetchInstr(), " is ", str(address))
+		
+		#just mark the end of the exe cycle for this instruction, nothing to do for bcast on CDB and instruction is not actually finished
+		#LD will finish in MEM stage, then can WB
+		#SD will skip MEM and finish in COMMIT stage, doesn't mess with WB
+		self.rs[self.currentExe].fetchInstr().setExEnd(cycle)
+		self.rs[self.currentExe].markDone()
+		self.currentExe = -1
+		self.cyclesInProgress = 0
+		
+		return 
+		
+	#method to take the earliest ready LD or SD instruction (if there is one) and send it off for actual processing
+	def startLDorSD(self, cycle, ROB):
+		#if something is already in progress, don't go through this
+		if self.currentLDorSD != -1:
+			return
+			
+		#search through queue from head to tail
+		for index in range(self.head, self.tail):
+			#print("looking at ", self.rs[index], " LDorSDReady = ", self.rs[index].LDorSDReady(cycle))
+			#check if this instruction has no remaining dependencies and is "ready" to be processed, and ensure it has not already been done
+			if self.rs[index].LDorSDReady(cycle) == True and self.rs[index].fetchLDorSDDone() == None: 
+				#if so, no dependencies exist, but check if the address has been computed
+				if self.rs[index].fetchAddr() != None:
+					#address is known, this instruction/RS is ready to process, but must check for a store if it is at the top of the ROB
+					if self.rs[index].fetchOp() == "SD" and ROB.getOldestEntry().getRobDest() == self.rs[index].fetchROBEntry():
+						#set this instruction to the one in execution and reset cycles variable
+						self.currentLDorSD = index
+						self.MemCyclesInProgress = 0
+						#also set the COM start cycle
+						#self.rs[self.currentLDorSD].fetchInstr().setComStart(cycle)
+						break
+					elif self.rs[index].fetchOp() == "LD": #else, check if it is a store
+						self.currentLDorSD = index
+						self.MemCyclesInProgress = 0
+						#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
+						break
+					#else, it is a store that is not at the top of the ROB and thus cannot be committed yet	
+				else:
+					#else, address unknown, which is okay for loads as we just wait, but if its a store, back out now
+					if self.rs[index].fetchOp() == "SD":
+						break
+			else:
+				#else, check if the address is known and if its a store, if address NOT known and it IS a store, back out now
+				if self.rs[index].fetchAddr() == None and self.rs[index].fetchOp() == "SD":
+					break
+
+	#now things get a little tricky
+	#method to find the next LD or SD to execute
+	#need to traverse list head to tail
+		#make a flag for if we see a store or not
+			#if store seen, mark it true
+			#if this store just seen IS NOT READY to execute, but address IS KNOWN, check the following instructions
+				#if a store comes after it, and IS READY to execute, go ahead and start up this entry in the queue
+				#if a load comes after it, no matter what, just return without sending an instruction to memory
+			#if this store just seen IS NOT READY to execute, but address IS NOT KNOWN, return without sending an instruction to memory
+	#need to check for Forwarding-from-a-Store again
+		#can perform a forward from store even if there is a LD or SD in progress
+	def executeLD(self, cycle, CDB):
+		#first check if an instr is actually in flight, if not, just jump out
+		if self.currentLDorSD == -1:
+			return 
+
+		#if a store is in progress, jump out
+		if self.rs[self.currentLDorSD].fetchOp() == "SD":
+			return
+			
+		#if we are attempting to start on the same cycle the addr was calculated, wait another
+		if self.rs[self.currentLDorSD].fetchInstr().getExEndCycle() >= cycle:
+			return
+
+		#otherwise, know a load is in progress, so proceed
+
+		#if an instr is in flight, and is just starting execution, first check if load from a store is possible before going to memory
+		if self.MemCyclesInProgress == 0:
+			self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
+			#if it is a load (should always be here), check if any stores that come before are pointing towards the same memory address and have their value ready
+			if self.rs[self.currentLDorSD].fetchOp() == "LD":
+				#must check the list from this LD location up to the head
+				for index in range(self.currentLDorSD, self.head-1, -1): #subtracting 1 from head to ensure proper bounds
+					#do not care if we see any other loads along the way, not doing load-to-load-forwarding
+					#check if this index is a store and if the address matches this one
+					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == address:
+						#if yes, perform forwarding-from-a-store and grab the value now instead of fetching from memory
+						self.rs[self.currentLDorSD].updateResult(self.rs[index].fetchResult())
+						#send to CDB buffer
+						CDB.newMem(self.rs[self.currentLDorSD], self.rs[self.currentLDorSD].fetchResult(), cycle)
+						#mark the RS as done as well 
+						self.rs[self.currentLDorSD].markDone()
+						self.rs[self.currentLDorSD].markLDorSDDone()
+						#since forwarding, need to update the MEM cycles as well
+						print("Performing forwarding-from-a-store from queue index ", index, " to ", self.currentLDorSD, ", will take from cycles ", cycle, "-", cycle+1)
+						#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
+						self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle+1)
+						#NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
+						break   
+			else:
+				raise Exception("TRYING TO EXECUTE A SD IN THE EXECUTE LD METHOD!")
+
+		#increment the count of cycles in exe stage
+		self.MemCyclesInProgress = self.MemCyclesInProgress + 1
+		#make sure the cycles executed thus far is still < the # it takes
+		if self.MemCyclesInProgress < self.mem_cycles:
+			#return, still need to exe for more cycles
+			return 
+				
+		#else, the cycles in exe have completed, go ahead and load the data from memory
+		loadResult = self.getMemory(self.rs[self.currentLDorSD].fetchAddr())		
+		
+		print("Result of ", self.rs[self.currentLDorSD].fetchInstr(), " is ", str(loadResult))
+		
+		#send to CDB buffer, mark RS done, update timing info
+		CDB.newMem(self.rs[self.currentLDorSD], loadResult, cycle)
+		self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle)
+		self.rs[self.currentLDorSD].markLDorSDDone()
+		#self.rs[self.currentLDorSD].markDone()
+		self.currentLDorSD = -1
+		self.MemCyclesInProgress = 0
+		
+		return 
+		
+	#method to execute store instructions
+	def executeSD(self, cycle):
+		#first check if an instr is actually in flight, if not, just jump out
+		if self.currentLDorSD == -1:
+			return 
+
+		#if a store is in progress, jump out
+		if self.rs[self.currentLDorSD].fetchOp() == "LD":
+			return
+
+		if self.MemCyclesInProgress == 0:
+			self.rs[self.currentLDorSD].fetchInstr().setComStart(cycle)
+		
+		#otherwise, know a store is in progress, so proceed
+	
+		#increment the count of cycles in exe stage
+		self.MemCyclesInProgress = self.MemCyclesInProgress + 1
+		#make sure the cycles executed thus far is still < the # it takes
+		if self.MemCyclesInProgress < self.mem_cycles:
+			#return, still need to exe for more cycles
+			return 
+				
+		#else, the cycles in exe have completed, go ahead and load the data from memory
+		loadResult = self.getMemory(self.rs[self.currentExe].fetchAddr())		
+		
+		print("Stored value: MEM[", self.rs[self.currentExe].fetchAddr(), "] = ", str(self.rs[self.currentLDorSD].fetchResult()))
+		
+		#mark RS done and update timing info
+		#CDB.newMem(self.rs[self.currentLDorSD], loadResult, cycle)
+		self.rs[self.currentLDorSD].fetchInstr().setComEnd(cycle)
+		self.rs[self.currentLDorSD].markLDorSDDone()
+		#self.rs[self.currentLDorSD].markDone()
+		self.currentLDorSD = -1
+		self.MemCyclesInProgress = 0
+		
+		return 
+		
+	#method to return if a store is in progress
+	def isSDInProgress(self):
+		return self.rs[self.currentLDorSD].fetchOp() == "SD"
+		
+		
+			
