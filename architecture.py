@@ -168,6 +168,9 @@ class Instruction:
 		
 	def getExEndCycle(self):
 		return self.exCycle[1]
+		
+	def getIsCycle(self):
+		return self.isCycle
 
 	def setIsCycle(self, val):
 		self.isCycle = val
@@ -310,6 +313,10 @@ class ReservationStationEntry:
 	def canExecute(self, currCycle):
 		return self.op != "None" and self.fetchDep1() == "None" and self.fetchDep2() == "None" and currCycle > self.cycle and self.done == 0
 		
+	#method returns true if we can calculate the address for a LD or SD
+	def canCalcAddress(self, currCycle):
+		return self.op != "None" and self.fetchDep2() == "None" and currCycle > self.cycle and self.done == 0
+		
 	#slight deviation to check if we can begin processing a load or store
 	def LDorSDReady(self, currCycle):
 		return self.op != "None" and self.fetchDep1() == "None" and self.fetchDep2() == "None" and currCycle > self.cycle 	
@@ -421,6 +428,7 @@ class ROBEntry:
 		return "\t".join([str(self.op), str(self.dest), str(self.value), str(self.done)])
 
 	def updateValue(self, newValue, cycle):
+		#print("Updating ROB entry ", self.robDest, " as complete")
 		if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join([self.op, self.dest, self.value]))
 		# Update value and mark as done
 		self.value = newValue
@@ -428,6 +436,7 @@ class ROBEntry:
 		self.doneCycle = cycle
 		
 	def updateStoreValue(self, cycle):
+		#print("Updating ROB entry ", self.robDest, " as complete")
 		if self.done: raise Exception("Attempting to update a ROB value that is already completed: ", ",".join([self.op, self.dest, self.value]))
 		# Update value and mark as done
 		#self.value = newValue
@@ -519,7 +528,7 @@ class ReorderBuffer:
 			#search for branch that matches the PC
 			if entry != None:
 				#print("PC = ", entry.getInstr().getPC(), " compPC = ", PC, " instr.getType() = ", instr.getType(), " entry.getInstr() = ", entry.getInstr().getType())
-				if oldestInstr.getPC() == entry.getInstr().getPC(): #find the entry of the oldest ROB instr (which is a branch) by its PC
+				if oldestInstr.getPC() == entry.getInstr().getPC() and entry.getDone() != 1: #find the entry of the oldest ROB instr (which is a branch) by its PC
 					entry.updateValue(None, doneCycle)
 				
 

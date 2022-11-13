@@ -68,6 +68,7 @@ class CommonDataBus:
             wbStation.fetchInstr().setWbCycle(cycle)
             #want to save the instr before it is deleted in case it was a branch or ld/sd
             instr = wbStation.fetchInstr()
+            #print("instr.getIsCycle() = ", instr.getIsCycle())
 
             #update all RS in all FUs with dependencies
             self.intAdder.writebackVals(wbStation, wbValue)

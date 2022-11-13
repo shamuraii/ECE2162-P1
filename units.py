@@ -149,7 +149,7 @@ class unitWithRS:
 			for RS in self.rs:
 				#not sure if an exception will be thrown for comparing None entries so check that first to short-circuit
 				#using last RS.fetchInstr().getType() != branchType check to not accidentally clear out the branch we're executing
-				if RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
+				if RS.fetchInstr() != None and RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
 					#if this entry is one that should be cleared, do it
 					self.clearRS(self.rs.index(RS))
 					
@@ -253,8 +253,10 @@ class IntAdder(unitWithRS):
 				#if the value returned is not None, then a value has been produced and may be used
 				value2 = ROB.searchEntries(dep2)
 				dep2 = "None"
+				
 		
 		#now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
+		print("Adding instr ", instr, " with branch entry ", instr.getBranchEntry())
 		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
 		print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 			
@@ -280,14 +282,14 @@ class IntAdder(unitWithRS):
 	def exeInstr(self, cycle, CDB):
 		#first check if an instr is actually in flight, if not, just jump out
 		if self.currentExe == -1:
-			return (-1,-1)
+			return (None,None)
 
 		#increment the count of cycles in exe stage
 		self.cyclesInProgress = self.cyclesInProgress + 1
 		#make sure the cycles executed thus far is still < the # it takes
 		if self.cyclesInProgress < self.ex_cycles:
 			#return, still need to exe for more cycles
-			return (-1,-1)
+			return (None,None)
 		
 		#else, the cycles in exe have completed, compute the actual result and send it over the CDB to ROB and release RS
 		result = None
@@ -422,7 +424,7 @@ class FloatAdder(unitWithRS):
 	def clearSpeculativeExe(self, entryToClear):
 		for idx, exe in enumerate(self.executing):
 			# check if the instr is a recently resolved mispredicted branch
-			if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+			if self.rs[idx].fetchInstr() != None and self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
 				self.executing[idx] = -1
 
 
@@ -509,7 +511,7 @@ class FloatMult(unitWithRS):
 	def clearSpeculativeExe(self, entryToClear):
 		for idx, exe in enumerate(self.executing):
 			# check if the instr is a recently resolved mispredicted branch
-			if self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+			if self.rs[idx].fetchInstr() != None and self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
 				self.executing[idx] = -1
 				
 
@@ -529,6 +531,8 @@ class MemoryUnit(unitWithRS):
 		self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
 		self.currentLDorSD = -1 #similar to currentExe, will be -1 if no LD or SD in progress and the queue entry if one is in progress
 		self.MemCyclesInProgress = 0 #similar to cyclesInProgress but for MEM instead of EXE stage
+		self.forwardFromStore = False #flag if we are forwarding from a store to a load
+		self.indexToForwardFrom = None #index of store we are forwarding data from
 		for _ in range(rs_count):
 			self.rs.append(ReservationStationEntry())
 			
@@ -649,9 +653,9 @@ class MemoryUnit(unitWithRS):
 		for index in range(self.head,self.tail):
 			#grab the entry for this index
 			entry = self.rs[index]
-			
+
 			#if the instruction has no dependencies, and has not already been completed, send it off to calculate the address in the exe stage
-			if entry.canExecute(cycle) and entry.fetchDone() != 1:
+			if entry.canCalcAddress(cycle) and entry.fetchDone() != 1:
 				#if no deps, execute this one
 				#print("Executing instr: ", entry.fetchInstr(), " from Queue index ", self.rs.index(entry), " | ", entry)
 				self.currentExe = self.rs.index(entry)
@@ -697,35 +701,57 @@ class MemoryUnit(unitWithRS):
 		if self.currentLDorSD != -1:
 			return
 			
+		#list for keeping track of stores that are yet to be executed, used in checking if loads can proceed or not
+		storesList = []	
+			
 		#search through queue from head to tail
 		for index in range(self.head, self.tail):
+			#print("self.rs[index] = ", self.rs[index])
+					
+			#if a store, add it to the list
+			if self.rs[index].fetchOp() == "SD":
+				storesList.append(self.rs[index])
 			#print("looking at ", self.rs[index], " LDorSDReady = ", self.rs[index].LDorSDReady(cycle))
-			#check if this instruction has no remaining dependencies and is "ready" to be processed, and ensure it has not already been done
-			print("self.rs[index] = ", self.rs[index])
-			print("self.rs[index].fetchLDorSDDone() = ", self.rs[index].fetchLDorSDDone())
+			#print("self.rs[index] = ", self.rs[index])
+			#print("self.rs[index].fetchLDorSDDone() = ", self.rs[index].fetchLDorSDDone())
+			#check if this instruction has no remaining dependencies and is "ready" to be processed , and ensure it has not already been done
 			if self.rs[index].LDorSDReady(cycle) == True and self.rs[index].fetchLDorSDDone() == None: 
 				#if so, no dependencies exist, but check if the address has been computed
-				if self.rs[index].fetchAddr() != None:
+				if self.rs[index].fetchAddr() != None:				
 					#address is known, this instruction/RS is ready to process, but must check for a store if it is at the top of the ROB
 					if self.rs[index].fetchOp() == "SD" and ROB.getOldestEntry().getRobDest() == self.rs[index].fetchROBEntry():
 						#set this instruction to the one in execution and reset cycles variable
 						self.currentLDorSD = index
 						self.MemCyclesInProgress = 0
+						print("Instruction ", self.rs[index].fetchInstr(), " is beginning commit and store to memory")
 						#also set the COM start cycle
 						#self.rs[self.currentLDorSD].fetchInstr().setComStart(cycle)
 						break
-					elif self.rs[index].fetchOp() == "LD": #else, check if it is a store
-						self.currentLDorSD = index
-						self.MemCyclesInProgress = 0
-						#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
-						break
+					elif self.rs[index].fetchOp() == "LD": #else, check if it is a load
+						skipLoad = False
+						#check if stores before it are for the same addr, and if they have their value
+						#if a store comes before and points to the same memory address, but does not have its value, do NOT proceed with this load
+						#we will fetch a stale value from the memory if that happens
+						for item in reversed(storesList):
+							#check address and value of the store
+							if item.fetchAddr() == self.rs[index].fetchAddr() and item.fetchValue1() == None:
+								#if addresses match and value unknown, proceed to check next LD or SD in the queue
+								skipLoad = True
+						
+						if skipLoad == False:
+							#set this instruction to the one in execution and reset cycles variable
+							self.currentLDorSD = index
+							self.MemCyclesInProgress = 0
+							print("Instruction ", self.rs[index].fetchInstr(), " is beginning load from memory")
+							#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
+							break
 					#else, it is a store that is not at the top of the ROB and thus cannot be committed yet	
 				else:
 					#else, address unknown, which is okay for loads as we just wait, but if its a store, back out now
 					if self.rs[index].fetchOp() == "SD":
 						break
 			else:
-				#else, check if the address is known and if its a store, if address NOT known and it IS a store, back out now
+				#else, check if the address is known and if it is a store, if address NOT known and it IS a store, back out now
 				if self.rs[index].fetchAddr() == None and self.rs[index].fetchOp() == "SD":
 					break
 
@@ -764,18 +790,21 @@ class MemoryUnit(unitWithRS):
 				for index in range(self.currentLDorSD, self.head-1, -1): #subtracting 1 from head to ensure proper bounds
 					#do not care if we see any other loads along the way, not doing load-to-load-forwarding
 					#check if this index is a store and if the address matches this one
-					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == self.rs[self.currentLDorSD].fetchAddr():
+					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == self.rs[self.currentLDorSD].fetchAddr() and self.rs[index].fetchValue1() != None:
 						#if yes, perform forwarding-from-a-store and grab the value now instead of fetching from memory
-						self.rs[self.currentLDorSD].updateValue1(self.rs[index].fetchValue1())
+						#self.rs[self.currentLDorSD].updateValue1(self.rs[index].fetchValue1())
+						self.forwardFromStore = True
+						self.indexToForwardFrom = index
 						#send to CDB buffer
-						CDB.newMem(self.rs[self.currentLDorSD], self.rs[self.currentLDorSD].fetchValue1(), cycle)
+						#CDB.newMem(self.rs[self.currentLDorSD], self.rs[self.currentLDorSD].fetchValue1(), cycle)
 						#mark the RS as done as well 
-						self.rs[self.currentLDorSD].markDone()
-						self.rs[self.currentLDorSD].markLDorSDDone()
+						#self.rs[self.currentLDorSD].markDone()
+						#self.rs[self.currentLDorSD].markLDorSDDone()
 						#since forwarding, need to update the MEM cycles as well
-						print("Performing forwarding-from-a-store from queue index ", index, " to ", self.currentLDorSD, ", will take from cycles ", cycle, "-", cycle+1)
+						print("Performing forwarding-from-a-store from ", self.rs[index].fetchInstr(), " to ", self.rs[self.currentLDorSD].fetchInstr(), ", will take from cycles ", cycle, "-", cycle+1)
+						self.MemCyclesInProgress = self.mem_cycles-1
 						#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
-						self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle+1)
+						#self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle+1)
 						#NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
 						return   
 			elif self.rs[self.currentLDorSD].fetchOp() == "SD":
@@ -787,9 +816,17 @@ class MemoryUnit(unitWithRS):
 		if self.MemCyclesInProgress < self.mem_cycles:
 			#return, still need to exe for more cycles
 			return 
-				
+					
+		loadResult = None
+					
 		#else, the cycles in exe have completed, go ahead and load the data from memory
-		loadResult = self.getMemory(self.rs[self.currentLDorSD].fetchAddr())		
+		if self.forwardFromStore == True:
+			self.rs[self.currentLDorSD].updateValue1(self.rs[self.indexToForwardFrom].fetchValue1())
+			loadResult = self.rs[self.currentLDorSD].fetchValue1()
+			self.forwardFromStore = False
+			self.indexToForwardFrom = None
+		else:
+			loadResult = self.getMemory(self.rs[self.currentLDorSD].fetchAddr())		
 		
 		print("Result of ", self.rs[self.currentLDorSD].fetchInstr(), " is ", str(loadResult))
 		
@@ -849,6 +886,19 @@ class MemoryUnit(unitWithRS):
 	#method to return if a store is in progress
 	def isSDInProgress(self):
 		return self.rs[self.currentLDorSD].fetchOp() == "SD"
+		
+	#method to clear instruction currently being executed in the event that it is incorrectly predicted
+	def clearSpeculativeExe(self, entryToClear):
+		#first check if an instr is actually in flight in either EXE or MEM/COM, if nothing is in progress, just jump out
+		if self.currentExe == -1 and self.currentLDorSD == -1:
+			return -1
+					
+		#otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
+		if self.currentExe != -1 and self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
+			self.currentExe = -1
+		#must check both EXE and MEM
+		if self.currentLDorSD != -1 and self.rs[self.currentLDorSD].fetchInstr().getBranchEntry() == entryToClear:
+			self.currentLDorSD = -1
 		
 		
 			

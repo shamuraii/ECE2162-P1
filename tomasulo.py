@@ -50,8 +50,10 @@ def loadInstructions():
 
 #method to load instructions into the buffer from a designated PC onward
 def reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, clearIndex):
-	#if we are to use the current method of using the instrList as the means of keeping track of IS/EX/MEM/WB/COM cycles,
-	#should probably modify the list in this method to add on the new instructions
+	#print("Next buffer entry check: ", instrBuffer.getNext())
+	#if instrBuffer.getNext().getBranchEntry() == branchEntry and takenOrNotTaken == 1:
+	#	print("Changing clearIndex")
+	#	clearIndex = 1
 
 	#first clear instruction buffer after the branch instruction (if not final instruction)
 	instrBuffer.removeInstrs(clearIndex) #remove all instructions from index 1 of buffer to the end
@@ -124,6 +126,7 @@ def tryIssueInstr(
 		else:
 			#will return ROB alias, but don't actually need it 
 			robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
+			print("Branch ROB alias: ", robAlias)
 			#issue this instruction to the integer adder
 			intAdder.issueInstruction(instr, cycle, RAT, intARF, robAlias, ROB, PC)
 			issued = True
@@ -142,7 +145,7 @@ def tryIssueInstr(
 			#if prediction == 1, then predict the branch is taken, so change PC to that of the one in BTB
 			if prediction == 1:
 				PC = nextPC
-				#also must reload instructions based on predicted branch
+				#also must reload instructions based on predicted branch - last two numbers are for if in recovery and if branch taken or not taken
 				reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, 1)
 				#have to sub one from PC now because the issued branch instruction will mess up the PC by +1
 				PC = PC - 1
@@ -326,20 +329,20 @@ def main():
 		lsUnit.executeSD(cycle, CDB, ROB)
 
 		#now check if results has -1s in it or not, tuple goes: (result of calculation, PC of instruction)
-		if results[0] != -1 and results[1] != -1:
+		if results[0] != None and results[1] != None:
 			#values are not invalid values, check result of the branch
 			calculation = results[0]
 			branchPC = results[1] 
 			offset = results[2]
 			#first need whether it is BEQ or BNE
 			branchType = instrList[branchPC].getType()
-			
+						
 			#make sure its a branch here in case something goofy happens down the line with testing
 			if branchType == "BEQ" or branchType == "BNE":
 				#print("Branch PC = ", branchPC)
 				#print("BTB")
 				#BP.print()
-			
+						
 				#now check result accordingly
 				#check the BP to see if this branch was predicted to be taken or not (returns expected PC)
 				prediction = BP.getEntryBranchPrediction(branchPC)
@@ -382,6 +385,7 @@ def main():
 					intAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
 					fpAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
 					fpMult.removeSpeculatedInstrs(RSEntriesToClear, branchType)
+					lsUnit.removeSpeculatedInstrs(RSEntriesToClear, branchType)
 					#print("After")
 					#intAdder.printRS()
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
@@ -407,19 +411,23 @@ def main():
 					intAdder.clearSpeculativeExe(RSEntriesToClear)
 					fpAdder.clearSpeculativeExe(RSEntriesToClear)
 					fpMult.clearSpeculativeExe(RSEntriesToClear)
+					lsUnit.clearSpeculativeExe(RSEntriesToClear)
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS ****************
 					
 					#7. fetch correct instructions
 					#print("InstrBuffer Before")
 					#print(instrBuffer)
 					if wasBranchTaken == True:
-						reloadInstructions(instrList, instrBuffer, PC, None, 1) #not passing a speculatedEntry, as this is the correct instr path now
+						reloadInstructions(instrList, instrBuffer, PC, None, 0) #not passing a speculatedEntry, as this is the correct instr path now
 					else:
 						reloadInstructions(instrList, instrBuffer, PC, None, 0) #not passing a speculatedEntry, as this is the correct instr path now
 					#print("InstrBuffer After")
 					#print(instrBuffer)
 					#this will take the next cycle to complete, resume fetching on x+2 cycles
 					pauseIssue = True
+				else:
+					#else, branch predicted correctly, take no action
+					print("Branch predicted correctly! No need to recover")
 		
 		#print instruction in execution for FUs - debug
 		#intAdder.printExe()
@@ -427,6 +435,7 @@ def main():
 		
 		#allow cdb to writeback
 		CDB.writeBack(cycle)
+
 
 		#grabbing these two here to check if a store instr can be committed, think the WB stage throws off timing otherwise by 1 cycle
 		entry = ROB.getOldestEntry()
