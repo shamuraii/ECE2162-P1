@@ -480,9 +480,13 @@ def main():
 			break
 
 	printInstructionsLong(outputList)
-	print(intARF)
-	print(fpARF)
+	print()
+	intARF.printRows()
+	print()
+	fpARF.printRows()
+	print()
 	lsUnit.printMemory()
+	print()
 
 if __name__ == '__main__':
 	main()

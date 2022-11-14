@@ -22,6 +22,19 @@ class IntegerARF:
 		if register in self.registers:
 			return self.registers[register]
 			
+	def printRows(self):
+		index = 1
+		line = ""
+		for key,value in self.registers.items():
+			if value != 0:
+				line += (str(key) + " = " + str(value) + " | ")
+				index = index + 1
+			if index%6 == 0:
+				index = 1
+				print(line)
+				line = ""
+		print(line)#must print remaining entries
+			
 	def __str__(self):
 		#stringify all registers and their values
 		return '\n'.join([str(key) + '\t' + str(value) for key, value in self.registers.items()])
@@ -45,6 +58,19 @@ class FloatARF:
 	def lookup(self, register):
 		if register in self.registers:
 			return self.registers[register]
+			
+	def printRows(self):
+		index = 1
+		line = ""
+		for key,value in self.registers.items():
+			if value != 0:
+				line += (str(key) + " = " + str(value) + " | ")
+				index = index + 1
+			if index%6 == 0:
+				index = 1
+				print(line)
+				line = ""
+		print(line) #must print remaining entries
 			
 	def __str__(self):
 		#stringify all registers and their values
@@ -565,9 +591,17 @@ class MemoryUnit(unitWithRS):
 
 	#method to print the memory values
 	def printMemory(self):
+		count = 1
+		line = ""
 		for index in range(64):
 			if self.memory[index] != None:
-				print("MEM[", index*4, "] = ", self.memory[index])
+				line += ("MEM[" + str(index*4) + "] = " + str(self.memory[index]) + " | ")
+				count = count + 1
+			if count%5 == 0:
+				count = 1
+				print(line)
+				line = ""
+		print(line) #must print remaining entries
 
 	#method to check if any available entries in queue
 	def nextAvailableEntry(self):
@@ -945,6 +979,9 @@ class MemoryUnit(unitWithRS):
 		#must check both EXE and MEM
 		if self.currentLDorSD != -1 and self.rs[self.currentLDorSD].fetchInstr().getBranchEntry() == entryToClear:
 			self.currentLDorSD = -1
+		#checking if forwarding in progress that is speculative
+		if self.self.forwardedLoad != -1 and self.rs[self.forwardedLoad].fetchInstr().getBranchEntry() == entryToClear:
+			self.forwardedLoad = -1
 		
 		
 			
