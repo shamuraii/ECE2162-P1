@@ -256,7 +256,6 @@ class IntAdder(unitWithRS):
 				
 		
 		#now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
-		print("Adding instr ", instr, " with branch entry ", instr.getBranchEntry())
 		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
 		print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 			
@@ -533,6 +532,10 @@ class MemoryUnit(unitWithRS):
 		self.MemCyclesInProgress = 0 #similar to cyclesInProgress but for MEM instead of EXE stage
 		self.forwardFromStore = False #flag if we are forwarding from a store to a load
 		self.indexToForwardFrom = None #index of store we are forwarding data from
+		self.storeInProgress = False #flag to note if the operation using memory is a store, if so, we may still perform forward from a store
+		self.goingToForward = False #flag for allowing a store to be in progress while attempting forward from store
+		self.forwardedLoad = -1 #index of load being forwarded data
+		self.forwardedCycles = 0 #cycles of forwarding from data
 		for _ in range(rs_count):
 			self.rs.append(ReservationStationEntry())
 			
@@ -564,7 +567,7 @@ class MemoryUnit(unitWithRS):
 	def printMemory(self):
 		for index in range(64):
 			if self.memory[index] != None:
-				print("MEM[", index, "] = ", self.memory[index])
+				print("MEM[", index*4, "] = ", self.memory[index])
 
 	#method to check if any available entries in queue
 	def nextAvailableEntry(self):
@@ -698,7 +701,8 @@ class MemoryUnit(unitWithRS):
 	#method to take the earliest ready LD or SD instruction (if there is one) and send it off for actual processing
 	def startLDorSD(self, cycle, ROB):
 		#if something is already in progress, don't go through this
-		if self.currentLDorSD != -1:
+		#checking if a load or store is in progress as well as if it is NOT a store, we will want to attempt forward from store whenever possible
+		if self.currentLDorSD != -1 and self.storeInProgress == False and self.forwardFromStore == False:
 			return
 			
 		#list for keeping track of stores that are yet to be executed, used in checking if loads can proceed or not
@@ -719,16 +723,17 @@ class MemoryUnit(unitWithRS):
 				#if so, no dependencies exist, but check if the address has been computed
 				if self.rs[index].fetchAddr() != None:				
 					#address is known, this instruction/RS is ready to process, but must check for a store if it is at the top of the ROB
-					if self.rs[index].fetchOp() == "SD" and ROB.getOldestEntry().getRobDest() == self.rs[index].fetchROBEntry():
+					if self.rs[index].fetchOp() == "SD" and ROB.getOldestEntry().getRobDest() == self.rs[index].fetchROBEntry() and self.storeInProgress == False:
 						#set this instruction to the one in execution and reset cycles variable
 						self.currentLDorSD = index
 						self.MemCyclesInProgress = 0
-						print("Instruction ", self.rs[index].fetchInstr(), " is beginning commit and store to memory")
+						self.storeInProgress = True
 						#also set the COM start cycle
 						#self.rs[self.currentLDorSD].fetchInstr().setComStart(cycle)
 						break
-					elif self.rs[index].fetchOp() == "LD": #else, check if it is a load
+					elif self.rs[index].fetchOp() == "LD" and self.forwardFromStore == False: #else, check if it is a load
 						skipLoad = False
+						forwardData = False
 						#check if stores before it are for the same addr, and if they have their value
 						#if a store comes before and points to the same memory address, but does not have its value, do NOT proceed with this load
 						#we will fetch a stale value from the memory if that happens
@@ -737,12 +742,21 @@ class MemoryUnit(unitWithRS):
 							if item.fetchAddr() == self.rs[index].fetchAddr() and item.fetchValue1() == None:
 								#if addresses match and value unknown, proceed to check next LD or SD in the queue
 								skipLoad = True
+							elif item.fetchAddr() == self.rs[index].fetchAddr() and item.fetchValue1() != None:
+								forwardData = True
+								self.goingToForward = True
 						
-						if skipLoad == False:
-							#set this instruction to the one in execution and reset cycles variable
-							self.currentLDorSD = index
-							self.MemCyclesInProgress = 0
-							print("Instruction ", self.rs[index].fetchInstr(), " is beginning load from memory")
+						
+						if skipLoad == False and (self.storeInProgress == False or forwardData == True):
+							#need to have 2 cases for setting variables- one where we are forwarding data and one where we load normally
+							if self.goingToForward == True:
+								self.forwardedLoad = index
+								self.forwardedCycles = 0
+							else:
+								#set this instruction to the one in execution and reset cycles variable
+								self.currentLDorSD = index
+								self.MemCyclesInProgress = 0
+							
 							#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
 							break
 					#else, it is a store that is not at the top of the ROB and thus cannot be committed yet	
@@ -768,29 +782,37 @@ class MemoryUnit(unitWithRS):
 		#can perform a forward from store even if there is a LD or SD in progress
 	def executeLD(self, cycle, CDB):
 		#first check if an instr is actually in flight, if not, just jump out
-		if self.currentLDorSD == -1:
+		if self.currentLDorSD == -1 and self.forwardFromStore == False:
 			return 
 
 		#if a store is in progress, jump out
-		if self.rs[self.currentLDorSD].fetchOp() == "SD":
+		if self.rs[self.currentLDorSD].fetchOp() == "SD" and self.goingToForward == False:
 			return
 			
 		#if we are attempting to start on the same cycle the addr was calculated, wait another
-		if self.rs[self.currentLDorSD].fetchInstr().getExEndCycle() >= cycle:
+		if self.currentLDorSD != -1 and self.rs[self.currentLDorSD].fetchInstr().getExEndCycle() >= cycle and self.goingToForward == False:
+			return
+		elif self.forwardedLoad != -1 and self.rs[self.forwardedLoad].fetchInstr().getExEndCycle() >= cycle and self.goingToForward == True:
 			return
 
 		#otherwise, know a load is in progress, so proceed
 
 		#if an instr is in flight, and is just starting execution, first check if load from a store is possible before going to memory
-		if self.MemCyclesInProgress == 0:
-			self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
+		if (self.MemCyclesInProgress == 0 and self.goingToForward == False) or (self.goingToForward == True and self.forwardedCycles == 0):
+			LDorSDvalue = -1
+			if self.goingToForward == True:
+				LDorSDvalue = self.forwardedLoad
+			else:
+				LDorSDvalue = self.currentLDorSD
+			self.rs[LDorSDvalue].fetchInstr().setMemStart(cycle)
+			print("Instruction ", self.rs[LDorSDvalue].fetchInstr(), " is beginning load from memory")
 			#if it is a load (should always be here), check if any stores that come before are pointing towards the same memory address and have their value ready
-			if self.rs[self.currentLDorSD].fetchOp() == "LD":
+			if self.rs[LDorSDvalue].fetchOp() == "LD" or self.goingToForward == True:
 				#must check the list from this LD location up to the head
-				for index in range(self.currentLDorSD, self.head-1, -1): #subtracting 1 from head to ensure proper bounds
+				for index in range(LDorSDvalue, self.head-1, -1): #subtracting 1 from head to ensure proper bounds
 					#do not care if we see any other loads along the way, not doing load-to-load-forwarding
 					#check if this index is a store and if the address matches this one
-					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == self.rs[self.currentLDorSD].fetchAddr() and self.rs[index].fetchValue1() != None:
+					if self.rs[index].fetchOp() == "SD" and self.rs[index].fetchAddr() == self.rs[LDorSDvalue].fetchAddr() and self.rs[index].fetchValue1() != None:
 						#if yes, perform forwarding-from-a-store and grab the value now instead of fetching from memory
 						#self.rs[self.currentLDorSD].updateValue1(self.rs[index].fetchValue1())
 						self.forwardFromStore = True
@@ -801,19 +823,27 @@ class MemoryUnit(unitWithRS):
 						#self.rs[self.currentLDorSD].markDone()
 						#self.rs[self.currentLDorSD].markLDorSDDone()
 						#since forwarding, need to update the MEM cycles as well
-						print("Performing forwarding-from-a-store from ", self.rs[index].fetchInstr(), " to ", self.rs[self.currentLDorSD].fetchInstr(), ", will take from cycles ", cycle, "-", cycle+1)
-						self.MemCyclesInProgress = self.mem_cycles-1
+						print("Performing forwarding-from-a-store from ", self.rs[index].fetchInstr(), " to ", self.rs[LDorSDvalue].fetchInstr(), ", will take from cycles ", cycle, "-", cycle+1)
+						self.forwardedCycles = self.mem_cycles-1
+						#self.MemCyclesInProgress = self.mem_cycles-1
 						#self.rs[self.currentLDorSD].fetchInstr().setMemStart(cycle)
 						#self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle+1)
 						#NOTE: ASSUMING WE CAN ONLY FORWARD DATA TO ONE ENTRY PER CYCLE, AND ASSUME THAT IT MAY RUN CONCURRENTLY WITH EITHER A LD OR SD INSTRUCTION
 						return   
-			elif self.rs[self.currentLDorSD].fetchOp() == "SD":
+			elif self.rs[LDorSDvalue].fetchOp() == "SD":
 				raise Exception("TRYING TO EXECUTE A SD IN THE EXECUTE LD METHOD!")
 
-		#increment the count of cycles in exe stage
-		self.MemCyclesInProgress = self.MemCyclesInProgress + 1
+
+		if self.forwardFromStore == True:
+			#increment the count of cycles in mem stage
+			self.forwardedCycles = self.forwardedCycles + 1
+		else:
+			#increment the count of cycles in exe stage
+			self.MemCyclesInProgress = self.MemCyclesInProgress + 1
+			
+		
 		#make sure the cycles executed thus far is still < the # it takes
-		if self.MemCyclesInProgress < self.mem_cycles:
+		if (self.MemCyclesInProgress < self.mem_cycles and self.forwardFromStore == False) or (self.forwardedCycles < self.mem_cycles and self.forwardFromStore == True):
 			#return, still need to exe for more cycles
 			return 
 					
@@ -821,24 +851,32 @@ class MemoryUnit(unitWithRS):
 					
 		#else, the cycles in exe have completed, go ahead and load the data from memory
 		if self.forwardFromStore == True:
-			self.rs[self.currentLDorSD].updateValue1(self.rs[self.indexToForwardFrom].fetchValue1())
-			loadResult = self.rs[self.currentLDorSD].fetchValue1()
+			self.rs[self.forwardedLoad].updateValue1(self.rs[self.indexToForwardFrom].fetchValue1())
+			loadResult = self.rs[self.forwardedLoad].fetchValue1()
 			self.forwardFromStore = False
 			self.indexToForwardFrom = None
+			self.goingToForward = False
+			print("Result of ", self.rs[self.forwardedLoad].fetchInstr(), " is ", str(loadResult))
+			#send to CDB buffer, mark RS done, update timing info
+			CDB.newMem(self.rs[self.forwardedLoad], loadResult, cycle)
+			self.rs[self.forwardedLoad].fetchInstr().setMemEnd(cycle)
+			self.rs[self.forwardedLoad].markLDorSDDone()
+			#self.rs[self.currentLDorSD].markDone()
+			self.forwardedLoad = -1
+			self.forwardedCycles = 0
 		else:
-			loadResult = self.getMemory(self.rs[self.currentLDorSD].fetchAddr())		
-		
-		print("Result of ", self.rs[self.currentLDorSD].fetchInstr(), " is ", str(loadResult))
-		
-		#send to CDB buffer, mark RS done, update timing info
-		CDB.newMem(self.rs[self.currentLDorSD], loadResult, cycle)
-		self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle)
-		self.rs[self.currentLDorSD].markLDorSDDone()
-		#self.rs[self.currentLDorSD].markDone()
-		self.currentLDorSD = -1
-		self.MemCyclesInProgress = 0
+			loadResult = self.getMemory(self.rs[self.currentLDorSD].fetchAddr())	
+			print("Result of ", self.rs[self.currentLDorSD].fetchInstr(), " is ", str(loadResult))
+			#send to CDB buffer, mark RS done, update timing info
+			CDB.newMem(self.rs[self.currentLDorSD], loadResult, cycle)
+			self.rs[self.currentLDorSD].fetchInstr().setMemEnd(cycle)
+			self.rs[self.currentLDorSD].markLDorSDDone()
+			#self.rs[self.currentLDorSD].markDone()
+			self.currentLDorSD = -1
+			self.MemCyclesInProgress = 0		
 		
 		return 
+		
 		
 	#method to execute store instructions
 	def executeSD(self, cycle, CDB, ROB):
@@ -857,6 +895,8 @@ class MemoryUnit(unitWithRS):
 		#if starting the store, set the com start cycle
 		if self.MemCyclesInProgress == 0:
 			self.rs[self.currentLDorSD].fetchInstr().setComStart(cycle)
+			print("Instruction ", self.rs[self.currentLDorSD].fetchInstr(), " is beginning commit and store to memory")
+
 		
 		#otherwise, know a store is in progress, so proceed
 	
@@ -880,6 +920,7 @@ class MemoryUnit(unitWithRS):
 		#self.rs[self.currentLDorSD].markDone()
 		self.currentLDorSD = -1
 		self.MemCyclesInProgress = 0
+		self.storeInProgress = False
 		
 		return 
 		
