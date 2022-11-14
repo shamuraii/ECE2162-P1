@@ -181,6 +181,8 @@ def tryIssueInstr(
 			robAlias = ROB.addEntry(instr.getType(), instr.getField1(), instr)
 			lsUnit.issueInstruction(instr, cycle, RAT, intARF, fpARF, robAlias, ROB, PC)
 			issued = True
+	elif instrType == "NOP":
+		issued = True
 	else:
 		print(instrType, " not implemented yet, cannot issue.")
 		issued = False #TODO, placeholder/example
@@ -252,14 +254,15 @@ def main():
 	#MUST STILL PARSE MEMORY VALUES *************************
 	initMemValues = config_lines[9].split(',')
 	for init in initMemValues:
-		#kinda hacky way to do this
-		pair = init.split('=')
-		value = float(pair[1])
-		pair1 = pair[0].split('[')
-		pair2 = pair1[1].split(']')
-		index = int(pair2[0])
-		#update mem value
-		lsUnit.updateMemory(index, value)
+		if init != "":
+			#kinda hacky way to do this
+			pair = init.split('=')
+			value = float(pair[1])
+			pair1 = pair[0].split('[')
+			pair2 = pair1[1].split(']')
+			index = int(pair2[0])
+			#update mem value
+			lsUnit.updateMemory(index, value)
 	#parsing if branch instructions refer to PC in byte (1) or relative format (anything else)
 	PCConfig = config_lines[10].split('=')
 	PCMode = int(PCConfig[1])
