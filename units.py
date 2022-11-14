@@ -714,7 +714,6 @@ class MemoryUnit(unitWithRS):
 			
 		#search through queue from head to tail
 		for index in range(self.head, self.tail):
-			#print("self.rs[index] = ", self.rs[index])
 					
 			#if a store, add it to the list
 			if self.rs[index].fetchOp() == "SD":
@@ -746,9 +745,11 @@ class MemoryUnit(unitWithRS):
 							if item.fetchAddr() == self.rs[index].fetchAddr() and item.fetchValue1() == None:
 								#if addresses match and value unknown, proceed to check next LD or SD in the queue
 								skipLoad = True
+								break
 							elif item.fetchAddr() == self.rs[index].fetchAddr() and item.fetchValue1() != None:
 								forwardData = True
 								self.goingToForward = True
+								break
 						
 						
 						if skipLoad == False and (self.storeInProgress == False or forwardData == True):
@@ -786,7 +787,7 @@ class MemoryUnit(unitWithRS):
 		#can perform a forward from store even if there is a LD or SD in progress
 	def executeLD(self, cycle, CDB):
 		#first check if an instr is actually in flight, if not, just jump out
-		if self.currentLDorSD == -1 and self.forwardFromStore == False:
+		if self.currentLDorSD == -1 and self.forwardFromStore == False and self.goingToForward == False:
 			return 
 
 		#if a store is in progress, jump out
