@@ -2,15 +2,16 @@ import units
 import architecture
 import cdb
 import branchPredictor
+import sys
 
 #making PC a global for passing/modifying between "main" and "tryIssueInstr"
 PC = 0
 
-def loadInstructions():
+def loadInstructions(instr_fname):
 	instructions = []
 	#open instruction file and read in all lines
 	print("Loading Instruction file...")
-	inst_file = open('instructions.txt', 'r')
+	inst_file = open(instr_fname, 'r')
 	inst_lines = inst_file.readlines()
 
 	#var to keep track of what PC of each instr will be
@@ -18,6 +19,11 @@ def loadInstructions():
 	#parse instructions
 	for line in inst_lines:    
 		line = line.upper()
+
+		# Skip lines that are comments (start with #)
+		if line.startswith("#"):
+			continue
+
 		#split each word by commas
 		parts = line.split(',')
 		#have to split the first part again into instr type and field 1
@@ -203,14 +209,20 @@ def checkIfDone(
 	#check if instructions left to issue or commit
 	return instrBuffer.isEmpty() and ROB.isEmpty()
 
-
-
 def main():
 	global PC
 	print("ECE 2162 - Project 1","Jefferson Boothe","James Bickerstaff","--------------------",sep="\n")    
 
+	argc = len(sys.argv)
+	if argc < 3:
+		print("Missing arguments. Usage:\npython tomasulo.py config.txt instructions.txt")
+		return
+	
+	config_fname = sys.argv[1]
+	instr_fname = sys.argv[2]
+		
 	print("Loading configuration file...")
-	f = open('config.txt', 'r')
+	f = open(config_fname, 'r')
 	config_lines = f.readlines()
 	config_lines = [s.strip() for s in config_lines]
 
@@ -273,7 +285,7 @@ def main():
 	f.close()
 
 	#call instruction method to read txt file
-	instrList = loadInstructions()
+	instrList = loadInstructions(instr_fname)
 	outputList = []
 	printInstructions(instrList)
 	for entry in instrList:
