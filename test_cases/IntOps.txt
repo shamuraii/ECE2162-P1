@@ -1,0 +1,7 @@
+# Tests basic Int FU's functionality
+# Includes dependencies and sctructural hazards
+ADD R1,R2,R3
+SUB R2,R3,R5
+ADDI R3,R1,999
+SUB R6,R3,R3
+SUB R0,R1,R5
