@@ -666,7 +666,6 @@ class MemoryUnit(unitWithRS):
 					value1 = fpARF.lookup(instr.getField1())
 				elif "R" in instr.getField1():
 					value1 = intARF.lookup(instr.getField1())
-				print("value1 = ", value1)
 			if dep2 == instr.getField3():
 				dep2 = "None"
 				value2 = intARF.lookup(instr.getField3())
