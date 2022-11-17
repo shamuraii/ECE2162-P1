@@ -349,6 +349,7 @@ def main():
 			calculation = results[0]
 			branchPC = results[1] 
 			offset = results[2]
+			ROBEntry = results[3]
 			#first need whether it is BEQ or BNE
 			branchType = instrList[branchPC].getType()
 						
@@ -406,7 +407,7 @@ def main():
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
 					
 					#3. clear ROB entries following the branch
-					ROB.clearSpeculatedEntries(branchPC)
+					ROB.clearSpeculatedEntries(ROBEntry)
 					
 					#4. update BTB
 					#print("BTB Before")

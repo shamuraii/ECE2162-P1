@@ -561,39 +561,31 @@ class ReorderBuffer:
 			self.head = self.length - 1
 					
 	#method to clear all ROB entries past a given entry - used for clearing speculated instructions
-	def clearSpeculatedEntries(self, PC):
+	def clearSpeculatedEntries(self, ROBEntry):
 		tail = self.getTail()
 		head = self.getHead()
 		#using a Bool to know if we need to check from additional entries in event that the ROB has wrapped around
 		#e.g. Tail = index 6, Head = index 2 - possible since it is a circular buffer
 		checkStart = True
-		deleteFollowing = False
-		#search through entire ROB oldest -> youngest to find the desired entry
-		#first searching from tail (oldest instruction) to end of the ROB
-		for entry in self.entries[tail:]:
-			#if the entry is none, we've hit the end, so break
+		
+		#clear all entries from ROBEntry to the end
+		for entry in self.entries[ROBEntry:]:
+			#make sure not empty first, if so, we've reached the end of the populated entries, so quit
 			if entry == None:
-				#no need to check from beginning of the list to tail now, so mark Bool as False
 				checkStart = False
 				break
-			#check if this is an entry that needs to be cleared
-			if deleteFollowing == True:
+			else:
 				self.clearEntry(self.entries.index(entry))
-			#check if this is the mispredicted branch instruction
-			if entry.getInstr().getPC() == PC:
-				#this is the instruction that mispredicted, clear all that follow it
-				deleteFollowing = True
 				
 		#if we need to go through rest of circular buffer start -> Tail, do so
 		if checkStart == True:
 			for entry in self.entries[0:tail]:
-				#check if this is an entry that needs to be cleared
-				if deleteFollowing == True:
+				#make sure not empty first, if so, we've reached the end of the populated entries, so quit
+				if entry == None:
+					checkStart = False
+					break
+				else:
 					self.clearEntry(self.entries.index(entry))
-				#check if this is the mispredicted branch instruction
-				if entry.getInstr().getPC() == PC:
-					#this is the instruction that mispredicted, clear all that follow it
-					deleteFollowing = True
 					
 	#method to make a store ready for completion
 	def completeStore(self, robAlias, cycle):

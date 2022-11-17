@@ -327,9 +327,10 @@ class IntAdder(unitWithRS):
 		
 		
 		print("Result of ", self.rs[self.currentExe].fetchInstr(), " is ", str(result))
-		#saving these 2 values now before they are cleared, for branch instruction resolution
+		#saving these 3 values now before they are cleared, for branch instruction resolution
 		instrPC = self.rs[self.currentExe].fetchInstr().getPC()
 		instrField3 = self.rs[self.currentExe].fetchInstr().getField3()
+		instrRS = self.currentExe
 		
 		#send to CDB buffer and clear FU, mark RS done
 		CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
@@ -338,7 +339,7 @@ class IntAdder(unitWithRS):
 		self.currentExe = -1
 		self.cyclesInProgress = 0
 		
-		return (result, instrPC, instrField3)
+		return (result, instrPC, instrField3, instrRS)
 		
 	#method to grab the instruction currently being executed (if any)
 	def clearSpeculativeExe(self, entryToClear):
