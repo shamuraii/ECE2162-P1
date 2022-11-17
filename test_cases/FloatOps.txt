@@ -1,0 +1,7 @@
+# Tests basic Float FU's functionality
+# Includes dependencies and sctructural hazards
+ADD.D F1,F2,F3
+SUB.D F5,F6,F7
+MULT.D F4,F2,F3
+SUB.D F2,F1,F4
+ADD.D F1,F3,F1
