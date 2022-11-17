@@ -66,7 +66,7 @@ def reloadInstructions(instructions, instrBuffer, PC, speculatedEntry, clearInde
 
 	#go from new PC until end of instructions list and add them to the buffer
 	for instr in instructions[int(PC):]:
-		instrBuffer.addInstr(instr, speculatedEntry)   
+		instrBuffer.addInstr(instr.copy(), speculatedEntry)   
 
 def printInstructions(instructions):
 	print("Printing instructions...")
