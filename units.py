@@ -87,7 +87,7 @@ class unitWithRS:
 		return -1 #else all RS are found to be busy, return -1 for no RS available
 
 	#method to populate the entry of the RS passed in
-	def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry):
+	def populateRS(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry, robAlias):
 		#populate fields of chosen RS
 		self.rs[entry].updateBusy(1) #mark this RS as now being populated/busy doing computation
 		self.rs[entry].updateOp(op) #will hold instruction in use
@@ -100,11 +100,12 @@ class unitWithRS:
 		self.rs[entry].updateInstr(instr)
 		#self.rs[entry].updatePC(PC) #PC for this instruction
 		self.rs[entry].updateBranchEntry(branchEntry)
+		self.rs[entry].updateROBEntry(robAlias)
 		
 	#slight variation of populateRS for the LS Queue since a couple extra vars are needed
 	def populateLSQueue(self, entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry, offset, ROBEntry):
 		#populate fields of chosen RS
-		self.populateRS(entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry)
+		self.populateRS(entry, op, dest, value1, value2, dep1, dep2, cycle, instr, PC, branchEntry, ROBEntry)
 		#also update the offset, and ROB entry
 		self.rs[entry].updateOffset(offset)
 		self.rs[entry].updateROBEntry(ROBEntry)
@@ -282,7 +283,7 @@ class IntAdder(unitWithRS):
 				
 		
 		#now populate the RS with this info - field 2 and field 3 here must be their values, if deps exist they will be overwritten
-		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry(), robAlias)
 		print("IntAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 			
 	#method to fetch next ready instr for execution
@@ -330,7 +331,10 @@ class IntAdder(unitWithRS):
 		#saving these 3 values now before they are cleared, for branch instruction resolution
 		instrPC = self.rs[self.currentExe].fetchInstr().getPC()
 		instrField3 = self.rs[self.currentExe].fetchInstr().getField3()
-		instrRS = self.currentExe
+		instrROB = self.rs[self.currentExe].fetchROBEntry()
+		#print("instrRob = ", instrROB)
+		index = instrROB.split("ROB")
+		#print("index = ", index)
 		
 		#send to CDB buffer and clear FU, mark RS done
 		CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
@@ -339,7 +343,7 @@ class IntAdder(unitWithRS):
 		self.currentExe = -1
 		self.cyclesInProgress = 0
 		
-		return (result, instrPC, instrField3, instrRS)
+		return (result, instrPC, instrField3, int(index[1]))
 		
 	#method to grab the instruction currently being executed (if any)
 	def clearSpeculativeExe(self, entryToClear):
@@ -404,7 +408,7 @@ class FloatAdder(unitWithRS):
 			value2 = ROB.searchEntries(dep2)
 			dep2 = "None"
 
-		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry(), robAlias)
 		print("FpAdder RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 
 	def fetchNext(self, cycle):
@@ -491,7 +495,7 @@ class FloatMult(unitWithRS):
 			value2 = ROB.searchEntries(dep2)
 			dep2 = "None"
 
-		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry())
+		self.populateRS(nextEntry, instr.getType(), dest, value1, value2, dep1, dep2, cycle, instr, PC, instr.getBranchEntry(), robAlias)
 		print("FpMult RS ", str(nextEntry), " update: ", self.rs[nextEntry])
 
 	def fetchNext(self, cycle):

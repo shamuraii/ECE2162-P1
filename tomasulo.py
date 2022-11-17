@@ -193,6 +193,8 @@ def tryIssueInstr(
 		print(instrType, " not implemented yet, cannot issue.")
 		issued = False #TODO, placeholder/example
 
+	#print("Issued to ROB entry: ", robAlias)
+
 	# STEP 5: POP BUFFER, SAVE CYCLE INFO
 	if issued:
 		instr.setIsCycle(cycle)

@@ -568,8 +568,8 @@ class ReorderBuffer:
 		#e.g. Tail = index 6, Head = index 2 - possible since it is a circular buffer
 		checkStart = True
 		
-		#clear all entries from ROBEntry to the end
-		for entry in self.entries[ROBEntry:]:
+		#clear all entries from ROBEntry+1 to the end - DO NOT WANT TO CLEAR THE ACTUAL BRANCH INSTR, JUST SPECULATED STUFF
+		for entry in self.entries[ROBEntry+1:]:
 			#make sure not empty first, if so, we've reached the end of the populated entries, so quit
 			if entry == None:
 				checkStart = False
