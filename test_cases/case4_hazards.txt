@@ -1,0 +1,14 @@
+ADD.D F0,F1,F2
+ADDI R1,R0,4
+# HAZARD, will finish same cycle as ADD.D and conflict for CDB
+ADDI R2,R0,8
+# HAZARD, RS is full, won't issue
+ADD R3,R1,R2
+LD F8,0(R3)
+MULT.D F5,F8,F8
+# HAZARD both ADD.D will resolve dependencies same cycle
+# conflict to start executing
+ADD.D F4,F5,F8
+ADD.D F6,F5,F5
+SD F4,4(R3)
+SD F6,8(R3)
