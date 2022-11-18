@@ -178,6 +178,7 @@ class unitWithRS:
 				#using last RS.fetchInstr().getType() != branchType check to not accidentally clear out the branch we're executing
 				if RS.fetchInstr() != None and RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
 					#if this entry is one that should be cleared, do it
+					print("Speculatively Cleared RS for Instr: ", RS.fetchInstr(), "Depth = ", branch)
 					self.clearRS(self.rs.index(RS))
 					
 					
@@ -358,7 +359,7 @@ class IntAdder(unitWithRS):
 		#print("entryToClear = ", entryToClear)
 		
 		#otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
-		if self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
+		if self.rs[self.currentExe].fetchInstr().getBranchEntry() in entryToClear:
 			self.currentExe = -1
 		
 	#method to print the instruction in progress and cycle(s) been in exe stage
@@ -458,7 +459,8 @@ class FloatAdder(unitWithRS):
 	def clearSpeculativeExe(self, entryToClear):
 		for idx, exe in enumerate(self.executing):
 			# check if the instr is a recently resolved mispredicted branch
-			if self.rs[idx].fetchInstr() != None and self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+			if self.rs[idx].fetchInstr() != None and self.rs[idx].fetchInstr().getBranchEntry() in entryToClear:
+				print("Speculatively Stopped Exe of Instr: ", self.rs[idx].fetchInstr(), "Depth = ", entryToClear)
 				self.executing[idx] = -1
 
 
@@ -545,7 +547,7 @@ class FloatMult(unitWithRS):
 	def clearSpeculativeExe(self, entryToClear):
 		for idx, exe in enumerate(self.executing):
 			# check if the instr is a recently resolved mispredicted branch
-			if self.rs[idx].fetchInstr() != None and self.rs[idx].fetchInstr().getBranchEntry() == entryToClear:
+			if self.rs[idx].fetchInstr() != None and self.rs[idx].fetchInstr().getBranchEntry() in entryToClear:
 				self.executing[idx] = -1
 				
 
@@ -982,13 +984,13 @@ class MemoryUnit(unitWithRS):
 			return -1
 					
 		#otherwise, check if the instruction being executed was a recently resolved mispredicted branch, if so, kill it
-		if self.currentExe != -1 and self.rs[self.currentExe].fetchInstr().getBranchEntry() == entryToClear:
+		if self.currentExe != -1 and self.rs[self.currentExe].fetchInstr().getBranchEntry() in entryToClear:
 			self.currentExe = -1
 		#must check both EXE and MEM
-		if self.currentLDorSD != -1 and self.rs[self.currentLDorSD].fetchInstr().getBranchEntry() == entryToClear:
+		if self.currentLDorSD != -1 and self.rs[self.currentLDorSD].fetchInstr().getBranchEntry() in entryToClear:
 			self.currentLDorSD = -1
 		#checking if forwarding in progress that is speculative
-		if self.forwardedLoad != -1 and self.rs[self.forwardedLoad].fetchInstr().getBranchEntry() == entryToClear:
+		if self.forwardedLoad != -1 and self.rs[self.forwardedLoad].fetchInstr().getBranchEntry() in entryToClear:
 			self.forwardedLoad = -1
 		
 		

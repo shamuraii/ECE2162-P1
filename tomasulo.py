@@ -34,10 +34,11 @@ def loadInstructions(instr_fname):
 		field1 = None
 		field2 = None
 		field3 = None
-		if type == "NOP": #if NOP, just make all fields NOP
-			field1 = "NOP"
-			field2 = "NOP"
-			field3 = "NOP"
+		if type == "NOP": #if NOP, make it add r0,r0,r0
+			type = "ADD"
+			field1 = "R0"
+			field2 = "R0"
+			field3 = "R0"
 		elif type == "LD" or type == "SD": #if load or store, need to manipulate some more
 			field1 = instrStart[1].strip() #grab the first register as normal
 			f2and3 = parts[1].split('(') #split the offset(R) term into [offset, R)]
@@ -397,8 +398,15 @@ def main():
 					RSEntriesToClear = RAT.recoverRAT(issueCycle)
 					#print("Recovered RAT")
 					#RAT.print()
-					
-					#2. clear speculative RS entries
+
+					#2. clear any executing speculated instructions from FUs - kill their exe in its tracks
+					print("RSEntriesToClear: ", RSEntriesToClear)
+					intAdder.clearSpeculativeExe(RSEntriesToClear)
+					fpAdder.clearSpeculativeExe(RSEntriesToClear)
+					fpMult.clearSpeculativeExe(RSEntriesToClear)
+					lsUnit.clearSpeculativeExe(RSEntriesToClear)
+
+					#3. clear speculative RS entries
 					#print("Before")
 					#intAdder.printRS()
 					intAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
@@ -410,28 +418,24 @@ def main():
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
 					
 					#print("Clearing ROBEntry = ", ROBEntry)
-					#3. clear ROB entries following the branch
+					#4. clear ROB entries following the branch
 					ROB.clearSpeculatedEntries(ROBEntry)
 					
-					#4. update BTB
+					#5. update BTB
 					#print("BTB Before")
 					#BP.print()
 					BP.updateBTB(branchPC, wasBranchTaken, offset, PCMode) 
 					#print("BTB after")
 					#BP.print()
 					
-					#5. reset the PC to correct value
+					#6. reset the PC to correct value
 					#print("PC before")
 					#print(PC)
 					PC = BP.getEntryPC(branchPC) #since branch should not have been taken, jump to calculated PC
 					#print("PC after")
 					#print(PC)
 					
-					#6. clear any executing speculated instructions from FUs - kill their exe in its tracks
-					intAdder.clearSpeculativeExe(RSEntriesToClear)
-					fpAdder.clearSpeculativeExe(RSEntriesToClear)
-					fpMult.clearSpeculativeExe(RSEntriesToClear)
-					lsUnit.clearSpeculativeExe(RSEntriesToClear)
+					
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS ****************
 					
 					#7. fetch correct instructions
@@ -463,7 +467,7 @@ def main():
 		if (ROB.canCommit(cycle) and lsUnit.isSDInProgress() == False) or (entry.getOp() == "SD" and entry.getDone() == 1):
 			entry = ROB.getOldestEntry()
 			comInstr = entry.getInstr()
-			print("ROB Commit: ", comInstr)
+			print("ROB Commit: ", comInstr, " | val = ", entry.getValue())
 
 			if entry.getOp() != "SD":
 				#update commit cycle
