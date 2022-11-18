@@ -140,7 +140,7 @@ def tryIssueInstr(
 			nextPC = BP.getEntryPC(PC)
 			prediction = BP.getEntryBranchPrediction(PC)
 			#need to create a copy of the RAT in case the branch is mispredicted - return this index for marking which instrs are associated w/ the branch
-			speculatedEntry = RAT.createCopy(PC) 
+			speculatedEntry = RAT.createCopy(cycle) 
 			
 			if prediction == 1: 
 				print("Issuing branch, predicting taken...")
@@ -336,7 +336,7 @@ def main():
 		lsUnit.fetchNext(cycle)
 		
 		#exe instructions for each FU, if possible - using a return tuple to signify result of a branch (-1 if not done, not branch instr, X otherwise)
-		results = intAdder.exeInstr(cycle, CDB)
+		results = intAdder.exeInstr(cycle, CDB, PC, RAT)
 		fpAdder.exeInstr(cycle, CDB)
 		fpMult.exeInstr(cycle, CDB)
 		lsUnit.exeInstr(cycle)
@@ -393,7 +393,7 @@ def main():
 					print("Branch mispredicted, recovering...")
 					#mispredicted this branch, need to recover:
 					#1. recover the rat
-					RSEntriesToClear = RAT.recoverRAT(branchPC)
+					RSEntriesToClear = RAT.recoverRAT(instrList[branchPC].getIsCycle())
 					#print("Recovered RAT")
 					#RAT.print()
 					
@@ -408,6 +408,7 @@ def main():
 					#intAdder.printRS()
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
 					
+					print("Clearing ROBEntry = ", ROBEntry)
 					#3. clear ROB entries following the branch
 					ROB.clearSpeculatedEntries(ROBEntry)
 					

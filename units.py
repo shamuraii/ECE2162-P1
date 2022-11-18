@@ -305,7 +305,7 @@ class IntAdder(unitWithRS):
 				
 				
 	#method to execute the next instr chosen
-	def exeInstr(self, cycle, CDB):
+	def exeInstr(self, cycle, CDB, PC, RAT):
 		#first check if an instr is actually in flight, if not, just jump out
 		if self.currentExe == -1:
 			return (None,None)
@@ -326,6 +326,9 @@ class IntAdder(unitWithRS):
 			#use subtraction for branch instructions as well, BEQ if Rs - Rt = 0 and BNE if Rs - Rt != 0
 			result = self.rs[self.currentExe].fetchValue1() - self.rs[self.currentExe].fetchValue2()
 		
+		
+		#if curOp == "BEQ" or curOp == "BNE":
+			#RAT.clearCopy(PC)
 		
 		print("Result of ", self.rs[self.currentExe].fetchInstr(), " is ", str(result))
 		#saving these 3 values now before they are cleared, for branch instruction resolution
@@ -984,7 +987,7 @@ class MemoryUnit(unitWithRS):
 		if self.currentLDorSD != -1 and self.rs[self.currentLDorSD].fetchInstr().getBranchEntry() == entryToClear:
 			self.currentLDorSD = -1
 		#checking if forwarding in progress that is speculative
-		if self.self.forwardedLoad != -1 and self.rs[self.forwardedLoad].fetchInstr().getBranchEntry() == entryToClear:
+		if self.forwardedLoad != -1 and self.rs[self.forwardedLoad].fetchInstr().getBranchEntry() == entryToClear:
 			self.forwardedLoad = -1
 		
 		

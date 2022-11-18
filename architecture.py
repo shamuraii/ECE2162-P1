@@ -66,22 +66,22 @@ class RegisterAliasTable:
 			raise Exception("RAT lookup does not exist: " + str(register))
 			
 	#method to create a copy of the RAT for branch purposes
-	def createCopy(self, PC):
-		self.copies.append({PC:self.entries.copy()}) #make it so that the saved RAT is correlated to the branch's PC
+	def createCopy(self, cycle):
+		self.copies.append({cycle:self.entries.copy()}) #make it so that the saved RAT is correlated to the branch's PC
 		return len(self.copies)-1 #return index of this copy
 		
 	#method to recover RAT in the event of a misprediction
-	def recoverRAT(self, PC):
+	def recoverRAT(self, cycle):
 		#using this var to grab the location in the copies array that needs deletion and those that follow - doing outside the loop for reasons
 		deletionLocation = None
 		#list containing which RS stations related to incorrect branches will need to be cleared, may have multiple chaining branches that need cleared
 		entriesToClear = []
 		#using a bool for noting when deletion entry is found
 		entryFound = False
-		#search through list to find dictionary with matching PC
+		#search through list to find dictionary with matching cycle
 		for dict in self.copies: #grab each dict
 			for key in dict.keys(): #grab keys, should only be one since its {key : {other dict}}
-				if key == PC:
+				if key == cycle:
 					self.entries = dict.get(key).copy() #copy dict from copies into the actual entries slot
 					#also need to clear any entries that come after this recovered one as they are now stale, so save this index
 					deletionLocation = self.copies.index(dict)
