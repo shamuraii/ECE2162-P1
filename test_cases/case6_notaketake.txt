@@ -1,0 +1,15 @@
+ADDI R1,R0,88
+ADDI R2,R0,77
+# Dont take 1st time
+BEQ R1,R2,8
+ADD R5,R6,R2
+LD F6,4(R0)
+LD F7,8(R0)
+SUB.D F5,F7,F6
+MULT.D F3,F6,F5
+ADD R1,R2,R0
+# Take
+BNE R2,R0,-8
+# This instruction should not commit
+ADD R9,R2,R3
+SD F3,12(R0)
