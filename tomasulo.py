@@ -495,9 +495,9 @@ def main():
 		print()
 
 		#DEBUG
-		if cycle > 100:
-			print("Error: DEBUG max cycles.")
-			break
+		#if cycle > 100:
+		#	print("Error: DEBUG max cycles.")
+		#	break
 
 	printInstructionsLong(outputList)
 	print()
