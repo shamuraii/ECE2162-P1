@@ -506,7 +506,6 @@ def main():
 	fpARF.printRows()
 	print()
 	lsUnit.printMemory()
-	print()
 
 if __name__ == '__main__':
 	main()
