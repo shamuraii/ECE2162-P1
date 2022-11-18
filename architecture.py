@@ -68,6 +68,7 @@ class RegisterAliasTable:
 	#method to create a copy of the RAT for branch purposes
 	def createCopy(self, cycle):
 		self.copies.append({cycle:self.entries.copy()}) #make it so that the saved RAT is correlated to the branch's PC
+		print("RAT Copy made.")
 		return len(self.copies)-1 #return index of this copy
 		
 	#method to recover RAT in the event of a misprediction
@@ -118,7 +119,7 @@ class RegisterAliasTable:
 	#print all registers and their aliases
 	def __str__(self):
 		#print all int reg aliases
-		return '\n'.join([str(key, ' : ', value) for key, value in self.entries.items()])
+		return '\n'.join([str(key) + ' : ' + str(value) for key, value in self.entries.items()])
 
 class Instruction:
 	def __init__(self, type, field1, field2, field3, PC):
