@@ -338,6 +338,7 @@ class IntAdder(unitWithRS):
 		#print("instrRob = ", instrROB)
 		index = instrROB.split("ROB")
 		#print("index = ", index)
+		issueCycle = self.rs[self.currentExe].fetchInstr().getIsCycle()
 		
 		#send to CDB buffer and clear FU, mark RS done
 		CDB.newIntAdd(self.rs[self.currentExe], result, cycle)
@@ -346,7 +347,7 @@ class IntAdder(unitWithRS):
 		self.currentExe = -1
 		self.cyclesInProgress = 0
 		
-		return (result, instrPC, instrField3, int(index[1]))
+		return (result, instrPC, instrField3, int(index[1]), issueCycle)
 		
 	#method to grab the instruction currently being executed (if any)
 	def clearSpeculativeExe(self, entryToClear):

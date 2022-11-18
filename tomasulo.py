@@ -352,6 +352,7 @@ def main():
 			branchPC = results[1] 
 			offset = results[2]
 			ROBEntry = results[3]
+			issueCycle = results[4]
 			#first need whether it is BEQ or BNE
 			branchType = instrList[branchPC].getType()
 						
@@ -393,7 +394,7 @@ def main():
 					print("Branch mispredicted, recovering...")
 					#mispredicted this branch, need to recover:
 					#1. recover the rat
-					RSEntriesToClear = RAT.recoverRAT(instrList[branchPC].getIsCycle())
+					RSEntriesToClear = RAT.recoverRAT(issueCycle)
 					#print("Recovered RAT")
 					#RAT.print()
 					
@@ -408,7 +409,7 @@ def main():
 					#intAdder.printRS()
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
 					
-					print("Clearing ROBEntry = ", ROBEntry)
+					#print("Clearing ROBEntry = ", ROBEntry)
 					#3. clear ROB entries following the branch
 					ROB.clearSpeculatedEntries(ROBEntry)
 					
@@ -454,8 +455,7 @@ def main():
 		
 		#allow cdb to writeback
 		CDB.writeBack(cycle)
-
-
+		
 		#grabbing these two here to check if a store instr can be committed, think the WB stage throws off timing otherwise by 1 cycle
 		entry = ROB.getOldestEntry()
 		comInstr = entry.getInstr()
