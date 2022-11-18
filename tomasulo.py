@@ -300,7 +300,7 @@ def main():
 	#print("ROB head = ", ROB.getHead())
 
 	#cycle variable to keep track of cycle number
-	cycle = 0
+	cycle = 1
 	#Program counter variable to keep track of where we are in the program & to deal with branches
 	PC = 0
 	#variable to pause Issuing of next instructions in the event of a misprediction, must wait a cycle for correct instrs to be placed within the buffer
