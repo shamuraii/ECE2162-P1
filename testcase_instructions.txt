@@ -1,0 +1,9 @@
+ld F2, 0(R1)
+mult.d F4, F2, F20
+ld F6, 0(R2)
+add.d F6, F4, F6
+sd F6, 0(R2)
+addi R1, R1, -4
+addi R2, R2, -4
+bne R1, R0, -8
+add.d F20, F2, F2
