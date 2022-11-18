@@ -559,7 +559,7 @@ class MemoryUnit(unitWithRS):
 		self.fu_count = fu_count
 		self.currentExe = -1 #-1 if nothing being executed or value of queue entry if something is in progress
 		self.cyclesInProgress = 0 #will keep track of how many cycles this instr has been executing for
-		self.memory = [None] * 64 #256 Bytes -> 64 Words
+		self.memory = [0] * 64 #256 Bytes -> 64 Words
 		self.rs = [] #called rs to make use of the inheritance, but it is actually a FIFO queue
 		self.head = 0 #location of the top of the FIFO
 		self.tail = 0 #location of the end of the FIFO (next place to fill an entry, not occupied)
@@ -605,7 +605,7 @@ class MemoryUnit(unitWithRS):
 		count = 1
 		line = ""
 		for index in range(64):
-			if self.memory[index] != None:
+			if self.memory[index] != 0:
 				line += ("MEM[" + str(index*4) + "] = " + str(self.memory[index]) + " | ")
 				count = count + 1
 			if count%5 == 0:
