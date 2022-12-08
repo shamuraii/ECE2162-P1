@@ -1,8 +1,6 @@
 import units
 import architecture
 import cdb
-import branchPredictor
-import branchPredictorP2
 import sys
 
 #making PC a global for passing/modifying between "main" and "tryIssueInstr"
@@ -91,7 +89,7 @@ def tryIssueInstr(
 	intARF: units.IntegerARF,
 	fpARF: units.FloatARF,
 	ROB: architecture.ReorderBuffer,
-	BP: branchPredictor.BranchPredictor,
+	BP, #BPred.branchPredictor
 	instructions: architecture.Instruction
 	):
 	global PC
@@ -218,12 +216,17 @@ def main():
 	print("ECE 2162 - Project 1","Jefferson Boothe","James Bickerstaff","--------------------",sep="\n")    
 
 	argc = len(sys.argv)
-	if argc < 3:
-		print("Missing arguments. Usage:\npython tomasulo.py config.txt instructions.txt")
+	if argc < 4:
+		print("Missing arguments. Usage:\npython tomasulo.py config.txt instructions.txt BP#")
 		return
 	
 	config_fname = sys.argv[1]
 	instr_fname = sys.argv[2]
+	bpnum = sys.argv[3]
+	if bpnum == 1:
+		import branchPredictor as BPred
+	else:
+		import branchPredictorP2 as BPred
 		
 	print("Loading configuration file...")
 	f = open(config_fname, 'r')
@@ -256,8 +259,7 @@ def main():
 	line = config_lines[7].split(',')
 	CDB = cdb.CommonDataBus(int(line[1]), intAdder, fpAdder, fpMult, lsUnit, ROB)
 	#create the branch predictor unit
-	#BP = branchPredictor.BranchPredictor()
-	BP = branchPredictorP2.BranchPredictorP2()
+	BP = BPred.BranchPredictor()
 	#parse register values
 	initValues = config_lines[8].split(',')
 	#have a list of [R=V,R=V] entries, parse this

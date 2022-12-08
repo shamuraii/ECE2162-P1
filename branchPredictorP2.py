@@ -99,7 +99,7 @@ class BTB:
         
         
 #primary branch predictor class
-class BranchPredictorP2:
+class BranchPredictor:
     def __init__(self) -> None:
         self.BTB = BTB()
         print("Using P2 Branch Predictor!")
