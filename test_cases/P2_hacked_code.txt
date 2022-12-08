@@ -1,0 +1,33 @@
+# 0 - 0000
+Beq R0,R0,2
+# 1 - 0001
+Addi R12,R0,0
+# 2 - 0010
+Addi R12,R0,0
+# 3 - 0011
+Addi R12,R0,0
+#ORIGINAL CODE
+# 4 - 0100
+Addi R2,R0,-2
+# 5 - 0101
+Addi R3,R0,4
+# 6 - 0110
+Addi R2,R2,2
+# 7 - 0111
+Ld F1,0(R1)
+# 8 - 1000
+Beq R2,R0,5
+# 9 - 1001
+Addi R3,R3,4
+# 10 - 1010
+Addi R2,R2,8
+# 11 - 1011
+Mult.d F3,F2,F1
+# 
+Add R2,R2,R2
+# 
+Add R1,R1,R1
+# 
+Add R1,R1,R1
+# 
+Add R1,R1,R1
