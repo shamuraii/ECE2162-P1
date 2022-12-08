@@ -433,10 +433,13 @@ def main():
 					#3. clear speculative RS entries
 					#print("Before")
 					#intAdder.printRS()
-					intAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
-					fpAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType)
-					fpMult.removeSpeculatedInstrs(RSEntriesToClear, branchType)
-					lsUnit.removeSpeculatedInstrs(RSEntriesToClear, branchType)
+					removed_instr = []
+					removed_instr.extend(intAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType))
+					removed_instr.extend(fpAdder.removeSpeculatedInstrs(RSEntriesToClear, branchType))
+					removed_instr.extend(fpMult.removeSpeculatedInstrs(RSEntriesToClear, branchType))
+					removed_instr.extend(lsUnit.removeSpeculatedInstrs(RSEntriesToClear, branchType))
+					for instr in removed_instr:
+						outputList.append(instr.copy())
 					#print("After")
 					#intAdder.printRS()
 					#WILL NEED TO DO THIS FOR ALL OTHER UNITS AND THEIR RESERVATION STATIONS ****************
@@ -526,6 +529,7 @@ def main():
 		#	print("Error: DEBUG max cycles.")
 		#	break
 
+	outputList.sort()
 	printInstructionsLong(outputList)
 	print()
 	intARF.printRows()

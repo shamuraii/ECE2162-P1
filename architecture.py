@@ -147,7 +147,10 @@ class Instruction:
 		outInstr.setComEnd(self.comCycle[1])
 		outInstr.setBranchEntry(self.branchEntry)
 		return outInstr
-	 
+	
+	def __lt__(self, other):
+		return self.isCycle < other.getIsCycle()
+
 	#getters for each part of the instruction
 	def getType(self):
 		return self.type

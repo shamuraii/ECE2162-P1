@@ -169,6 +169,7 @@ class unitWithRS:
 
 	#method to clear RS occupied by mispredicted branch instructions
 	def removeSpeculatedInstrs(self, wrongBranches, branchType):
+		removed_instr = []
 		#loop through entire RS for each deleted branch looking for matches
 		#looping through incorrect branches
 		for branch in wrongBranches:
@@ -179,7 +180,9 @@ class unitWithRS:
 				if RS.fetchInstr() != None and RS.fetchBranchEntry() != None and RS.fetchBranchEntry() == branch and RS.fetchInstr().getType() != branchType:
 					#if this entry is one that should be cleared, do it
 					print("Speculatively Cleared RS for Instr: ", RS.fetchInstr(), "Depth = ", branch)
+					removed_instr.append(RS.fetchInstr())
 					self.clearRS(self.rs.index(RS))
+		return removed_instr
 					
 					
 
