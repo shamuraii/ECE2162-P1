@@ -219,10 +219,13 @@ def main():
 	if argc < 4:
 		print("Missing arguments. Usage:\npython tomasulo.py config.txt instructions.txt BP#")
 		return
+	elif not str.isdigit(sys.argv[3]):
+		print("Incorrect arguments. BP# must be an integer. Usage:\npython tomasulo.py config.txt instructions.txt BP#")
+		return
 	
 	config_fname = sys.argv[1]
 	instr_fname = sys.argv[2]
-	bpnum = sys.argv[3]
+	bpnum = int(sys.argv[3])
 	if bpnum == 1:
 		import branchPredictor as BPred
 	else:
