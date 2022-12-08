@@ -2,6 +2,7 @@ import units
 import architecture
 import cdb
 import branchPredictor
+import branchPredictorP2
 import sys
 
 #making PC a global for passing/modifying between "main" and "tryIssueInstr"
@@ -251,11 +252,12 @@ def main():
 	#rob,#entries
 	line = config_lines[6].split(',')
 	ROB = architecture.ReorderBuffer(int(line[1]))
-	#cdb,#entries
+    #cdb,#entries
 	line = config_lines[7].split(',')
 	CDB = cdb.CommonDataBus(int(line[1]), intAdder, fpAdder, fpMult, lsUnit, ROB)
 	#create the branch predictor unit
-	BP = branchPredictor.BranchPredictor()
+	#BP = branchPredictor.BranchPredictor()
+	BP = branchPredictorP2.BranchPredictorP2()
 	#parse register values
 	initValues = config_lines[8].split(',')
 	#have a list of [R=V,R=V] entries, parse this
@@ -431,7 +433,10 @@ def main():
 					#6. reset the PC to correct value
 					#print("PC before")
 					#print(PC)
-					PC = BP.getEntryPC(branchPC) #since branch should not have been taken, jump to calculated PC
+					if wasBranchTaken == True:
+						PC = BP.getEntryPC(branchPC) #since branch should not have been taken, jump to calculated PC
+					else:
+						PC = branchPC+1
 					#print("PC after")
 					#print(PC)
 					

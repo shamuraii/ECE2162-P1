@@ -1,0 +1,12 @@
+Addi R2,R0,-2
+Addi R3,R0,4
+Addi R2,R2,2
+Ld F1,0(R1)
+Beq R2,R0,5
+Addi R3,R3,4
+Addi R2,R2,8
+Mult.d F3,F2,F1
+Add R2,R2,R2
+Add R1,R1,R1
+Add R1,R1,R1
+Add R1,R1,R1
