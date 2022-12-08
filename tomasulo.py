@@ -426,7 +426,7 @@ def main():
 					#5. update BTB
 					#print("BTB Before")
 					#BP.print()
-					BP.updateBTB(branchPC, wasBranchTaken, offset, PCMode) 
+					newPC = BP.updateBTB(branchPC, wasBranchTaken, offset, PCMode) 
 					#print("BTB after")
 					#BP.print()
 					
@@ -434,7 +434,7 @@ def main():
 					#print("PC before")
 					#print(PC)
 					if wasBranchTaken == True:
-						PC = BP.getEntryPC(branchPC) #since branch should not have been taken, jump to calculated PC
+						PC = newPC #since branch should not have been taken, jump to calculated PC
 					else:
 						PC = branchPC+1
 					#print("PC after")

@@ -14,11 +14,12 @@ class BTBEntry:
 		if self.branchPredict == 1 and branchResult == 0: #if branch was predicted taken, but actually wasn't, update
 			#branch not taken, only change flag to not taken, do not update target address
 			self.branchPredict = 0
+			return -1
 		elif self.branchPredict == 0 and branchResult == 1: #if branch was predicted not taken, but actually wasn't, update
 			#branch taken, change prediction bit
 			self.branchPredict = 1
 			#also update the predicted PC to reflect this change
-			self.calculatePredictedPC(PC, offset, mode)
+			return self.calculatePredictedPC(PC, offset, mode)
 		#don't need to worry about the other cases since it's only a 1-bit predictor 
 
 	#calculate the predicted PC - called upon filling BTBEntry, as well as when changing the prediction bit
@@ -35,10 +36,10 @@ class BTBEntry:
 			if self.branchPredict == 1: #branch is predicted to be taken
 				#new PC = PC+1+offset
 				self.predictedPC = PC + 1 + int(offset) 
-				print("self.predictedPC before: ", self.predictedPC)
+				#print("self.predictedPC before: ", self.predictedPC)
 				#take bottom 3 bits and store as BTB target bits ************************
 				self.targetBits = self.predictedPC & 7
-				print("self.targetBits: ", self.targetBits)
+				#print("self.targetBits: ", self.targetBits)
 				#now recalculate the predicted PC as the branch PC with the bottom 3 bits as the target Bits
 				#create a bitmask for the top 29 bits of PC
 				mask = ~0xf
@@ -47,7 +48,8 @@ class BTBEntry:
 				self.predictedPC = self.predictedPC & mask
 				#finally, use bitwise OR to place the target bits in the bottom 3 bit slots
 				self.predictedPC = self.predictedPC | self.targetBits
-				print("self.predictedPC after: ", self.predictedPC)
+				#print("self.predictedPC after: ", self.predictedPC)
+				return self.predictedPC
 			
 				
 		#not going to do the byte addressing [PC+4+offset<<2] method, just relative
@@ -58,15 +60,15 @@ class BTBEntry:
 		#create a bitmask for the top 29 bits of PC
 		mask = ~0xf
 		mask = mask | 0x8
-		print("mask is: ", mask)
-		print("PC before: ", PC)
+		#print("mask is: ", mask)
+		#print("PC before: ", PC)
 		#now use the mask to preserve all bits from PC but bottom 3
 		PC = PC & mask
-		print("PC after mask: ", PC)
+		#print("PC after mask: ", PC)
 		#finally, use bitwise OR to place the target bits in the bottom 3 bit slots
 		PC = PC | self.targetBits
-		print("PC after adding target bits: ", PC)
-		print("self.targetBits: ", self.targetBits)
+		#print("PC after adding target bits: ", PC)
+		#print("self.targetBits: ", self.targetBits)
 		return PC
 		
 	#grab the prediction for this branch - taken or not taken
@@ -85,7 +87,7 @@ class BTB:
         
     #method to update the branch prediction of the given entry
     def updateEntryPrediction(self, entry, PC, result, offset, mode):
-        self.entries[entry].updatePrediction(PC, result, offset, mode)
+        return self.entries[entry].updatePrediction(PC, result, offset, mode)
         
     #grab the predicted PC for a given entry
     def getEntryPredictedPC(self, entry, PC):
@@ -111,7 +113,7 @@ class BranchPredictorP2:
         entry = self.getEntry(PC)
 
         #update the branch result for taken or not taken, if taken, also update target bits
-        self.BTB.updateEntryPrediction(entry, PC, result, offset, mode)
+        return self.BTB.updateEntryPrediction(entry, PC, result, offset, mode)
             
     #method to return the listed PC of a branch
     def getEntryPC(self, PC):
