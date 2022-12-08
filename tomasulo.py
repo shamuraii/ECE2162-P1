@@ -222,7 +222,7 @@ def main():
 	elif not str.isdigit(sys.argv[3]):
 		print("Incorrect arguments. BP# must be an integer. Usage:\npython tomasulo.py config.txt instructions.txt BP#")
 		return
-	
+
 	config_fname = sys.argv[1]
 	instr_fname = sys.argv[2]
 	bpnum = int(sys.argv[3])
@@ -258,7 +258,7 @@ def main():
 	#rob,#entries
 	line = config_lines[6].split(',')
 	ROB = architecture.ReorderBuffer(int(line[1]))
-    #cdb,#entries
+	#cdb,#entries
 	line = config_lines[7].split(',')
 	CDB = cdb.CommonDataBus(int(line[1]), intAdder, fpAdder, fpMult, lsUnit, ROB)
 	#create the branch predictor unit
@@ -373,6 +373,7 @@ def main():
 				#now check result accordingly
 				#check the BP to see if this branch was predicted to be taken or not (returns expected PC)
 				prediction = BP.getEntryBranchPrediction(branchPC)
+				
 				#bool holding actual result of the branch
 				wasBranchTaken = None
 				#bool for if we made the correct prediction 
@@ -392,6 +393,22 @@ def main():
 				else:
 					#misprediction is true if we predicted NOT taken and it was taken
 					misprediction = (wasBranchTaken == True)
+					
+					
+				#need to also verify the correct path was taken using the BP2
+				if bpnum != 1:
+					target = BP.checkTargetBits(branchPC)
+					
+					#verify bits against this branch's value - just going to recalculate
+					tempPC = branchPC + 1 + int(offset) 
+					#print("self.predictedPC before: ", self.predictedPC)
+					#take bottom 3 bits and store as BTB target bits ************************
+					newTargetBits = tempPC & 7
+					
+					#compare new calculated value against those stored
+					if target != newTargetBits:
+						misprediction = True
+						
 				
 				#print("prediction = ", prediction)
 				#print("misprediction = ", misprediction)
