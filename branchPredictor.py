@@ -105,41 +105,44 @@ class BTB:
         
 #primary branch predictor class
 class BranchPredictor:
-    def __init__(self) -> None:
-        self.BTB = BTB()
-        print("Using P1 Branch Predictor!")
-        
-    def print(self):
-        print(self.BTB)
+	def __init__(self) -> None:
+		self.BTB = BTB()
+		print("Using P1 Branch Predictor!")
+		
+	def print(self):
+		print(self.BTB)
 
-    #method to update the BTB based on branch result
-    def updateBTB(self, PC, result, offset, mode):
-        #see if entry already existed for this PC
-        entry = self.getEntry(PC)
-        #if this PC is in the BTB, just update the related branch prediction bit
-        if self.BTB.getEntryPC(entry) == PC:
-            return self.BTB.updateEntryPrediction(entry, result, offset, mode)
-        else:
-            #else, this PC must be added to the BTB as its own entry
-            self.BTB.populateEntry(entry, PC)
-            #also update the branch result in the event of not taken, since the BTB entry initializes to taken
-            return self.BTB.updateEntryPrediction(entry, result, offset, mode)
-            
-    #method to return the listed PC of a branch
-    def getEntryPC(self, PC):
-        #first grab the entry it should be located in
-        entry = self.getEntry(PC)
-        return int(self.BTB.getEntryPredictedPC(entry))
-    
-    #method to just return if a branch is predicted taken (1) or not (0)
-    def getEntryBranchPrediction(self, PC):
-        #first grab the entry it should be located in
-        entry = self.getEntry(PC)
-        return self.BTB.getBranchPrediction(entry)
-        
-    #find which entry in the BTB this PC belongs to
-    def getEntry(self, PC):
-        return PC & 7 #bitwise value AND 000...00111 to get lowest 3 bits
+	#method to update the BTB based on branch result
+	def updateBTB(self, PC, result, offset, mode):
+		#see if entry already existed for this PC
+		entry = self.getEntry(PC)
+		#if this PC is in the BTB, just update the related branch prediction bit
+		if self.BTB.getEntryPC(entry) == PC:
+			return self.BTB.updateEntryPrediction(entry, result, offset, mode)
+		else:
+			#else, this PC must be added to the BTB as its own entry
+			self.BTB.populateEntry(entry, PC)
+			#also update the branch result in the event of not taken, since the BTB entry initializes to taken
+			return self.BTB.updateEntryPrediction(entry, result, offset, mode)
+			
+	#method to return the listed PC of a branch
+	def getEntryPC(self, PC):
+		#first grab the entry it should be located in
+		entry = self.getEntry(PC)
+		return int(self.BTB.getEntryPredictedPC(entry))
+
+	#method to just return if a branch is predicted taken (1) or not (0)
+	def getEntryBranchPrediction(self, PC):
+		#first grab the entry it should be located in
+		entry = self.getEntry(PC)
+		if self.BTB.getEntryPC(entry) == PC:
+			return self.BTB.getBranchPrediction(entry)
+		else:
+			return 0
+		
+	#find which entry in the BTB this PC belongs to
+	def getEntry(self, PC):
+		return PC & 7 #bitwise value AND 000...00111 to get lowest 3 bits
         
         
         
